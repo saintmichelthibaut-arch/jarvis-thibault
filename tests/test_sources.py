@@ -100,3 +100,12 @@ def test_base_sqlite(tmp_path):
     ])
     assert [x["valeur"] for x in r] == [2, 200, None]
     assert "erreur" in r[2]
+
+
+def test_lire_heure():
+    from jarvis_thibault.serveur import lire_heure
+
+    assert lire_heure("08:00") == (8, 0)
+    assert lire_heure("8h") == (8, 0)
+    assert lire_heure("8h30") == (8, 30)
+    assert lire_heure("7") == (7, 0)

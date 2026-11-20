@@ -66,6 +66,19 @@ def lancer_briefing(etat: Etat, lire_sur_mac: bool = False) -> Dict[str, Any]:
             etat.statut = "veille"
 
 
+def lire_heure(texte: str) -> tuple[int, int]:
+    """Comprend « 08:00 », « 8h », « 8h30 », « 8 », « 8.30 »."""
+    import re
+
+    m = re.match(r"\s*(\d{1,2})\s*(?:[:hH.]\s*(\d{1,2})?)?\s*$", str(texte))
+    if not m:
+        raise ValueError(f"Heure du briefing illisible : {texte!r} (exemple : 08:00)")
+    h, mn = int(m.group(1)), int(m.group(2) or 0)
+    if not (0 <= h < 24 and 0 <= mn < 60):
+        raise ValueError(f"Heure du briefing invalide : {texte!r}")
+    return h, mn
+
+
 def _planificateur(etat: Etat) -> None:
     """Déclenche le briefing chaque matin à l'heure prévue."""
     cfg = etat.cfg
@@ -78,7 +91,7 @@ def _planificateur(etat: Etat) -> None:
             dernier = cerveau.dernier_briefing(cfg)
             if dernier and dernier["horodatage"][:10] == jour:
                 fait_le = jour
-            h, m = (int(x) for x in bcfg["heure"].split(":"))
+            h, m = lire_heure(bcfg["heure"])
             heure_passee = (now.hour, now.minute) >= (h, m) and now.hour < 12
             if (fait_le != jour and heure_passee and _JOURS[now.weekday()] in bcfg["jours"]):
                 fait_le = jour
