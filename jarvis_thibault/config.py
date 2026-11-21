@@ -35,6 +35,8 @@ DEFAUTS: Dict[str, Any] = {
         "fournisseur": "openai",
         "modele": "gpt-4o-mini-tts",
         "voix": "onyx",
+        "style": "jarvis",
+        "effet": "jarvis",
         "consignes": (
             "Parle en français de France, voix grave et posée de majordome "
             "élégant, légèrement amusé, débit naturel."
@@ -53,8 +55,9 @@ DEFAUTS: Dict[str, Any] = {
         "fichier_taches": "fixigo.md",
         "base": {"active": False, "indicateurs": []},
     },
-    "ecran": {"forme": "cerveau", "couleurs": "video", "plein_ecran": False},
+    "ecran": {"forme": "cerveau", "couleurs": "video", "plein_ecran": False, "panneaux": "auto"},
     "rappels": {"avant_rdv": 10},
+    "moodle": {"actif": False, "url": ""},
     "bilan": {"actif": True, "heure": "19:30", "lecture_auto": False},
     "ecoute": {"transcription": "gpt-4o-mini-transcribe"},
     "serveur": {"port": 8765},

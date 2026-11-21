@@ -244,3 +244,20 @@ class VeilleDemo:
         self.prochaine = time.time() + random.randint(40, 90)
         m = random.choice([29, 49, 79, 120, 240])
         self.ev.publier("paiement", "Nouveau paiement", f"+{m} €", "stripe")
+
+
+def veille_devoirs(etat, ev: Evenements, annonces: set) -> None:
+    """Annonce une fois chaque devoir Moodle à rendre dans moins de 24 h."""
+    mo = (etat.donnees or {}).get("moodle") or {}
+    tz = ZoneInfo(etat.cfg["moi"]["fuseau"])
+    now = datetime.now(tz)
+    appel = (etat.cfg["moi"]["appellations"] or ["Monsieur"])[0]
+    for d in mo.get("devoirs") or []:
+        q = datetime.fromisoformat(d["echeance"])
+        heures = (q - now).total_seconds() / 3600
+        cle = f"devoir-{d['titre']}-{d['echeance']}"
+        if 0 < heures <= 24 and cle not in annonces and 8 <= now.hour < 22:
+            annonces.add(cle)
+            quand = "ce soir" if q.date() == now.date() and q.hour >= 17 else ("aujourd'hui" if q.date() == now.date() else "demain")
+            ev.publier("devoir", f"Devoir · {d.get('cours') or 'Moodle'}", f"{d['titre']} — {quand} {q:%H:%M}", "moodle",
+                       dire=f"{appel}, petit rappel scolaire : {d['titre']} est à rendre {quand} à {q.hour} heures {q.minute:02d}.".replace(" 00.", "."))

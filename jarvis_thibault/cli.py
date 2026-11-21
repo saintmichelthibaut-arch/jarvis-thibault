@@ -14,6 +14,7 @@ def main(argv=None) -> int:
     s.add_argument("--port", type=int)
     s.add_argument("--ouvrir", action="store_true", help="ouvrir le navigateur")
     sub.add_parser("app", help="ouvrir Jarvis dans sa propre fenêtre (Mac)")
+    sub.add_parser("moodle", help="connecter Jarvis à votre Moodle")
     sub.add_parser("bilan", help="générer le bilan du soir maintenant")
     b = sub.add_parser("briefing", help="générer le briefing maintenant")
     b.add_argument("--lire", action="store_true", help="le lire à voix haute sur le Mac")
@@ -28,6 +29,11 @@ def main(argv=None) -> int:
 
         demarrer(port=args.port, demo=demo, ouvrir=args.ouvrir)
         return 0
+
+    if args.cmd == "moodle":
+        from .connexion_moodle import connecter
+
+        return connecter()
 
     if args.cmd == "app":
         from .app import main as app_main

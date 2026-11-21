@@ -19,7 +19,8 @@ from pydantic import BaseModel
 from . import cerveau, voix
 from .config import Config, charger
 from .sources import taches as mod_taches
-from .vie import Evenements, Memoire, Rappels, VeilleDemo, VeilleStripe, sans_accents, veille_rappels, veille_rendez_vous
+from .vie import (Evenements, Memoire, Rappels, VeilleDemo, VeilleStripe, sans_accents, veille_devoirs, veille_rappels,
+                  veille_rendez_vous)
 
 log = logging.getLogger("jarvis")
 STATIC = Path(__file__).parent / "static"
@@ -157,6 +158,7 @@ def _planificateur(etat: Etat) -> None:
             # Veilles
             veille_rappels(etat, etat.ev, etat.rappels)
             veille_rendez_vous(etat, etat.ev, annonces)
+            veille_devoirs(etat, etat.ev, annonces)
             stripe.tic()
             if demo:
                 demo.tic()
@@ -238,7 +240,7 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             "statut": etat.statut,
             "cerveau": f"{cfg['cerveau']['fournisseur']} · {cfg['cerveau']['modele']}",
             "ecran": cfg["ecran"],
-            "voix": {"fournisseur": cfg["voix"]["fournisseur"],
+            "voix": {"fournisseur": cfg["voix"]["fournisseur"], "effet": cfg["voix"].get("effet", "jarvis"),
                      "realiste": cfg["voix"]["fournisseur"] == "openai" and bool(cfg.secret("openai_api_key"))},
             "transcription": bool(cfg.secret("openai_api_key")),
             "dernier_evenement": etat.ev.dernier_id,

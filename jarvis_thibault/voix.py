@@ -12,6 +12,14 @@ from typing import Optional
 from openai import OpenAI
 
 
+CONSIGNES_JARVIS = (
+    "Tu es JARVIS, une intelligence artificielle majordome. Parle en français de France, avec une voix masculine "
+    "grave, calme et parfaitement posée ; diction précise et élégante, légèrement synthétique, comme un assistant "
+    "d'intelligence artificielle de film de science-fiction. Ton courtois, flegmatique, avec une pointe d'ironie "
+    "bienveillante. Rythme mesuré, petites pauses aux virgules, jamais pressé."
+)
+
+
 def dossier_audio(cfg) -> Path:
     p = cfg.dossier / "audio"
     p.mkdir(parents=True, exist_ok=True)
@@ -33,8 +41,11 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
             sortie = dossier / f"{nom}.mp3"
             args = dict(model=v.get("modele", "gpt-4o-mini-tts"), voice=v.get("voix", "onyx"),
                         input=texte[:4000], response_format="mp3")
-            if "tts-1" not in args["model"] and v.get("consignes"):
-                args["instructions"] = v["consignes"]
+            if "tts-1" not in args["model"]:
+                if v.get("style", "jarvis") == "jarvis":
+                    args["instructions"] = CONSIGNES_JARVIS
+                elif v.get("consignes"):
+                    args["instructions"] = v["consignes"]
             with OpenAI(api_key=cle).audio.speech.with_streaming_response.create(**args) as r:
                 r.stream_to_file(sortie)
             return sortie

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 
-from .sources import agenda, base_fixigo, meteo, stripe_fixigo, taches
+from .sources import agenda, base_fixigo, meteo, moodle, stripe_fixigo, taches
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
@@ -34,6 +34,7 @@ SOURCES: Dict[str, Callable] = {
     "stripe": stripe_fixigo.stripe,
     "base": base_fixigo.base,
     "taches": taches.taches,
+    "moodle": moodle.moodle,
 }
 
 
@@ -42,6 +43,8 @@ def collecter(cfg) -> Dict[str, Any]:
     actives = dict(SOURCES)
     if not cfg["fixigo"].get("stripe") and not cfg.demo:
         actives.pop("stripe")
+    if not cfg["moodle"].get("actif") and not cfg.demo:
+        actives.pop("moodle")
     out: Dict[str, Any] = {"erreurs": {}}
 
     def _un(nom: str, fn: Callable):
@@ -159,6 +162,22 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
                     tags.append("priorité " + "haute" if x["priorite"] >= 3 else f"priorité {x['priorite']}/3")
                 L.append(f"  - {x['texte']}" + (f" [{', '.join(tags)}]" if tags else ""))
 
+    mo = d.get("moodle")
+    if mo:
+        dv = mo.get("devoirs") or []
+        if dv:
+            L.append(f"MOODLE ({mo.get('site', 'école')}) — DEVOIRS ET ÉCHÉANCES À VENIR :")
+            for x in dv[:12]:
+                q = datetime.fromisoformat(x["echeance"])
+                retard = " — EN RETARD" if x.get("en_retard") else ""
+                L.append(f"  - {JOURS[q.weekday()]} {q.day} {MOIS[q.month - 1]} à {q:%H:%M} : {x['titre']}"
+                         f" ({x.get('cours') or 'cours'}){retard}")
+        else:
+            L.append("MOODLE : aucun devoir à rendre dans les 3 prochaines semaines.")
+        if mo.get("cours"):
+            L.append("COURS EN COURS : " + " ; ".join(
+                f"{c['nom']}" + (f" ({c['progression']:.0f} %)" if isinstance(c.get("progression"), (int, float)) else "")
+                for c in mo["cours"][:8]))
     if s and s.get("ca_jours"):
         L.append("FIXIGO — ENCAISSEMENTS PAR JOUR (14 j) : " + ", ".join(
             f"{x['jour'][8:10]}/{x['jour'][5:7]} {x['montant']:.0f} €" for x in s["ca_jours"]))
@@ -207,7 +226,8 @@ def _consigne_briefing(cfg) -> str:
 3. L'agenda du jour : les rendez-vous dans l'ordre avec l'heure ; signale les journées chargées ou les trous utiles. Mentionne demain s'il y a quelque chose d'important.
 4. Fixigo, les chiffres : hier, les 7 derniers jours, le mois et le MRR par rapport à l'objectif. Dis clairement si c'est bon ou s'il faut accélérer.
 5. Fixigo, l'action : les 3 priorités du jour, tirées des tâches (en retard et échéances d'abord) et de ce que révèlent les chiffres. Sois concret.
-6. Une phrase de conclusion motivante et légèrement drôle.
+6. Si des devoirs Moodle sont fournis : ceux à rendre dans les prochains jours, avec la date, le plus urgent d'abord.
+7. Une phrase de conclusion motivante et légèrement drôle.
 Uniquement les données fournies. Pas de markdown, pas de listes : du texte parlé fluide en paragraphes."""
 
 

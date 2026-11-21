@@ -119,3 +119,38 @@ def test_intentions():
     assert intentions("Ajoute une tâche urgente : relancer Paul") == [("AJOUT_TACHE", "!!! relancer Paul")]
     assert intentions("J'ai fini de préparer la démo") == [("TACHE_FAITE", "préparer la démo")]
     assert intentions("Combien on a encaissé cette semaine ?") == []
+
+
+def test_moodle(tmp_path):
+    import httpx
+
+    from jarvis_thibault.connexion_moodle import _ecrire
+    from jarvis_thibault.sources.moodle import donnees_moodle, jeton_depuis_identifiants
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/login/token.php"):
+            return httpx.Response(200, json={"token": "abc123"})
+        f = dict(httpx.QueryParams(req.content.decode()))["wsfunction"]
+        if f == "core_webservice_get_site_info":
+            return httpx.Response(200, json={"sitename": "Moodle École", "userid": 7})
+        if f == "core_calendar_get_action_events_by_timesort":
+            return httpx.Response(200, json={"events": [
+                {"name": "Devoir 2 est à remettre", "activityname": "Devoir 2", "course": {"fullname": "Finance"},
+                 "modulename": "assign", "timesort": 4102444800, "overdue": False, "url": "u", "action": {"name": "Remettre"}}]})
+        if f == "core_course_get_enrolled_courses_by_timeline_classification":
+            return httpx.Response(200, json={"courses": [{"fullname": "Finance", "progress": 40}]})
+        return httpx.Response(200, json={"exception": "x", "message": "inconnue"})
+
+    t = httpx.MockTransport(handler)
+    assert jeton_depuis_identifiants("https://m.ex", "a", "b", transport=t) == "abc123"
+    d = donnees_moodle("https://m.ex/", "abc123", transport=t)
+    assert d["site"] == "Moodle École" and d["devoirs"][0]["titre"] == "Devoir 2" and d["cours"][0]["nom"] == "Finance"
+
+    conf = tmp_path / "config.toml"
+    conf.write_text('[moi]\nville = "Paris"\n\n[serveur]\nport = 8765\n', encoding="utf-8")
+    _ecrire("url", "https://m.ex", conf, "moodle")
+    _ecrire("actif", True, conf, "moodle")
+    _ecrire("actif", True, conf, "moodle")
+    import tomllib
+    c = tomllib.loads(conf.read_text(encoding="utf-8"))
+    assert c["moodle"] == {"url": "https://m.ex", "actif": True} and c["serveur"]["port"] == 8765

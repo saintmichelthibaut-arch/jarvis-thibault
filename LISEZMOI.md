@@ -35,6 +35,11 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 | « Rappelle-moi à 15 h d'appeler le comptable » · « …dans 20 minutes de… » | programme un rappel vocal |
 | « Souviens-toi que je préfère les rendez-vous le matin » | le retient pour toujours (et s'en sert) |
 | « Qu'est-ce que je dois faire en priorité pour Fixigo ? » | vous donne un plan d'action |
+| « Qu'est-ce que j'ai à rendre cette semaine ? » · « Fais-moi le point sur mes devoirs » | compte rendu Moodle (devoirs, échéances, cours) |
+
+**Moodle** : connectez-le une fois avec `bash ~/jarvis-thibault-main/connecter-moodle.sh` (adresse du Moodle + identifiant ; le mot de passe n'est pas gardé, seulement un jeton). Jarvis vous prévient la veille de chaque devoir à rendre.
+
+**L'écran** : au repos, seul le cerveau est affiché. Les fenêtres (chiffres, agenda, devoirs…) apparaissent quand Jarvis en parle ou quand un événement arrive. Touche **D** ou bouton **Tableau** pour toutes les garder affichées.
 
 **Sur l'écran :** courbe des encaissements des 14 derniers jours, compte à rebours avant le prochain rendez-vous, état de chaque module, rappels à venir.
 
