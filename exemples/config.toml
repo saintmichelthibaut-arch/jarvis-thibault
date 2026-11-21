@@ -67,5 +67,9 @@ nom = "Missions terminées (7 j)"
 sql = "SELECT count(*) FROM missions WHERE statut = 'terminee' AND updated_at >= current_date - 7"
 panneau = "semaine"
 
+[ecran]
+forme = "cerveau"        # "cerveau" (comme la vidéo) ou "sphere" (sphère de particules)
+couleurs = "video"       # "video" (multicolore) ou "bleu" (tout en bleu)
+
 [serveur]
 port = 8765

@@ -168,6 +168,7 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             "briefing": cerveau.dernier_briefing(cfg),
             "statut": etat.statut,
             "cerveau": f"{cfg['cerveau']['fournisseur']} · {cfg['cerveau']['modele']}",
+            "ecran": cfg["ecran"],
             "voix": {"fournisseur": cfg["voix"]["fournisseur"],
                      "realiste": cfg["voix"]["fournisseur"] == "openai" and bool(cfg.secret("openai_api_key"))},
             "demo": cfg.demo,

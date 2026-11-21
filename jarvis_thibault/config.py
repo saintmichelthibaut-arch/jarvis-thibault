@@ -53,6 +53,7 @@ DEFAUTS: Dict[str, Any] = {
         "fichier_taches": "fixigo.md",
         "base": {"active": False, "indicateurs": []},
     },
+    "ecran": {"forme": "cerveau", "couleurs": "video"},
     "serveur": {"port": 8765},
 }
 
