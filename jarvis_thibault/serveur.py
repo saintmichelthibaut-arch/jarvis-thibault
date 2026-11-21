@@ -40,6 +40,21 @@ class Etat:
             return self.donnees
 
 
+def expliquer_erreur(exc: Exception) -> str:
+    """Traduit les erreurs courantes en français compréhensible."""
+    t = f"{type(exc).__name__}: {exc}"
+    bas = t.lower()
+    if "api_key" in bas or "authentication" in bas or "401" in bas or "incorrect api key" in bas:
+        return "clé OpenAI absente ou refusée : vérifiez openai_api_key dans ~/.jarvis/secrets.toml"
+    if "insufficient_quota" in bas or "quota" in bas or "billing" in bas:
+        return "crédit OpenAI épuisé : ajoutez du crédit sur platform.openai.com"
+    if "model" in bas and ("not found" in bas or "does not exist" in bas or "404" in bas):
+        return f"modèle introuvable ({t[:160]}) : vérifiez « modele » dans ~/.jarvis/config.toml"
+    if "connect" in bas or "connection" in bas:
+        return "le cerveau est injoignable (Ollama éteint ou pas d'Internet)"
+    return t[:300]
+
+
 def _url_audio(p: Optional[Path]) -> Optional[str]:
     return f"/audio/{p.name}" if p else None
 
@@ -79,6 +94,18 @@ def lire_heure(texte: str) -> tuple[int, int]:
     return h, mn
 
 
+def ouvrir_ecran(cfg: Config) -> None:
+    """Ouvre l'écran de Jarvis dans sa fenêtre à lui (via lancer.sh) ou, à défaut, le navigateur."""
+    import platform
+    import subprocess
+
+    lancer = cfg.dossier / "app" / "lancer.sh"
+    if platform.system() == "Darwin" and lancer.exists():
+        subprocess.Popen(["/bin/bash", str(lancer)])
+    else:
+        webbrowser.open(f"http://localhost:{cfg['serveur']['port']}/")
+
+
 def _planificateur(etat: Etat) -> None:
     """Déclenche le briefing chaque matin à l'heure prévue."""
     cfg = etat.cfg
@@ -100,7 +127,7 @@ def _planificateur(etat: Etat) -> None:
                 if bcfg.get("notification", True):
                     voix.notifier("Jarvis", b["texte"][:180])
                 if bcfg.get("ouvrir_tableau", True):
-                    webbrowser.open(f"http://localhost:{cfg['serveur']['port']}/")
+                    ouvrir_ecran(cfg)
             if now.minute == 0:
                 voix.nettoyer(cfg)
         except Exception:  # noqa: BLE001
@@ -148,13 +175,23 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
     def api_briefing():
         if cerveau.VERROU_BRIEFING.locked():
             raise HTTPException(409, "Briefing déjà en cours")
-        return lancer_briefing(etat)
+        try:
+            return lancer_briefing(etat)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Briefing impossible")
+            raise HTTPException(500, expliquer_erreur(exc)) from exc
 
     @app.post("/api/parler")
     def api_parler(m: Message):
         etat.statut = "reflexion"
         try:
-            rep = cerveau.repondre(cfg, m.message, m.historique, etat.rafraichir())
+            try:
+                rep = cerveau.repondre(cfg, m.message, m.historique, etat.rafraichir())
+            except Exception as exc:  # noqa: BLE001
+                log.exception("Cerveau indisponible")
+                appel = (cfg["moi"]["appellations"] or ["Monsieur"])[0]
+                return {"reponse": f"Mon cerveau ne répond pas, {appel}.", "erreur": expliquer_erreur(exc),
+                        "audio": None, "tache_ajoutee": None}
             tache_ajoutee, rep = cerveau.extraire_ajout_tache(rep)
             if tache_ajoutee:
                 mod_taches.ajouter(_fichier_taches(cfg), tache_ajoutee)

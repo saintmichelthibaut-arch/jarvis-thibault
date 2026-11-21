@@ -122,17 +122,7 @@ fi
 
 # ─── 6. L'app « Jarvis » + démarrage automatique ────────────────────
 bleu "6/7  Création de l'app Jarvis"
-cat > "$JH/app/lancer.sh" <<EOF
-#!/bin/bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:\$HOME/.local/bin:\$PATH"
-PORT=\$(grep -E '^port[[:space:]]*=' "$JH/config.toml" | head -1 | tr -dc '0-9'); PORT=\${PORT:-8765}
-if ! curl -s -o /dev/null "http://127.0.0.1:\$PORT/"; then
-  pgrep -x ollama >/dev/null 2>&1 || open -a Ollama 2>/dev/null || (nohup ollama serve >/dev/null 2>&1 &)
-  nohup "$JH/app/.venv/bin/jarvis-thibault" serveur >> "$JH/jarvis.log" 2>&1 &
-  for i in \$(seq 1 40); do curl -s -o /dev/null "http://127.0.0.1:\$PORT/" && break; sleep 0.5; done
-fi
-[[ "\${1:-}" == "--silencieux" ]] || open "http://localhost:\$PORT/"
-EOF
+cp "$ICI/lancer.sh" "$JH/app/lancer.sh"
 chmod +x "$JH/app/lancer.sh"
 mkdir -p "$HOME/Applications"
 rm -rf "$APP"

@@ -284,27 +284,41 @@ const NOEUDS=(function(){const box=$("#noeuds");let items=[];
 function afficher(txt){let i=0;$("#reponse").innerHTML=esc(txt).split(/(\s+)/).map(w=>/^\s+$/.test(w)?w:`<span class="mot" style="animation-delay:${Math.min(i++*25,2200)}ms">${w}</span>`).join("")}
 function transcript(t){$("#q").value="";$("#q").placeholder=t}
 
-/* ── Voix ── */
-let ctxAudio=null,lecteur=null;
+/* ── Voix ──
+   Safari et Chrome n'autorisent le son qu'après un geste de l'utilisateur. On « déverrouille »
+   donc un lecteur unique au premier clic ou à la première touche, puis on le réutilise. */
+const SILENCE="data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+let ctxAudio=null,lecteur=null,sonOk=false;
+function preparerAudio(){if(!lecteur){lecteur=new Audio();lecteur.preload="auto";
+    try{ctxAudio=new(window.AudioContext||window.webkitAudioContext)();ORBE.analyseur=ctxAudio.createAnalyser();ORBE.analyseur.fftSize=256;
+      ORBE.analyseur.connect(ctxAudio.destination);ctxAudio.createMediaElementSource(lecteur).connect(ORBE.analyseur)}catch(e){ctxAudio=null;ORBE.analyseur=null}}
+  return lecteur}
+function deverrouiller(){preparerAudio();if(ctxAudio&&ctxAudio.state!=="running")ctxAudio.resume().catch(()=>{});
+  if(!sonOk){lecteur.src=SILENCE;lecteur.play().then(()=>{lecteur.pause();sonOk=true}).catch(()=>{});
+    try{if("speechSynthesis" in window){const u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u)}}catch(e){}}}
+["pointerdown","keydown","touchstart"].forEach(ev=>document.addEventListener(ev,deverrouiller,{capture:true}));
 function parlerNavigateur(texte){return new Promise(res=>{if(!("speechSynthesis" in window))return res();const u=new SpeechSynthesisUtterance(texte);u.lang="fr-FR";
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("fr"));if(v)u.voice=v;u.onend=res;u.onerror=res;statut("parole");ORBE.forcer=.55;speechSynthesis.speak(u)}).then(()=>{ORBE.forcer=0;statut("veille")})}
-function jouer(url,texte){if(!url)return parlerNavigateur(texte);
-  return new Promise(res=>{if(lecteur)lecteur.pause();lecteur=new Audio(url);
-    try{if(!ctxAudio){ctxAudio=new(window.AudioContext||window.webkitAudioContext)();ORBE.analyseur=ctxAudio.createAnalyser();ORBE.analyseur.fftSize=256;ORBE.analyseur.connect(ctxAudio.destination)}
-      ctxAudio.resume();ctxAudio.createMediaElementSource(lecteur).connect(ORBE.analyseur)}catch(e){}
-    const fin=()=>{statut("veille");res()};lecteur.onended=fin;lecteur.onerror=fin;statut("parole");lecteur.play().catch(fin)})}
+function jouer(url,texte){if(!url)return parlerNavigateur(texte);preparerAudio();
+  return new Promise(res=>{const fin=()=>{lecteur.onended=lecteur.onerror=null;statut("veille");res()};
+    lecteur.pause();lecteur.src=url;lecteur.onended=fin;lecteur.onerror=()=>{fin();parlerNavigateur(texte)};statut("parole");
+    if(ctxAudio)ctxAudio.resume().catch(()=>{});
+    lecteur.play().catch(()=>{statut("veille");afficherAide("Le navigateur a bloqué le son : cliquez n'importe où sur la page, puis « Réécouter ».");res()})})}
+function afficherAide(t){const el=document.createElement("div");el.style.cssText="font-size:11px;color:var(--cyan);margin-top:10px;letter-spacing:.06em";el.textContent=t;$("#reponse").appendChild(el)}
 
 /* ── Conversation ── */
-let occupe=false;
+let occupe=false,dernierAudio=null;
+async function lireJson(r){let j=null;try{j=await r.json()}catch(e){}if(!r.ok&&!(j&&j.reponse))throw new Error((j&&(j.detail||j.erreur))||("erreur "+r.status));return j}
 async function demander(q){if(!q.trim()||occupe)return;occupe=true;transcript(q);afficher("…");statut("reflexion");
-  try{const r=await(await fetch("/api/parler",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique})})).json();
-    historique.push({role:"user",content:q},{role:"assistant",content:r.reponse});afficher(r.reponse);if(r.tache_ajoutee)charger(true);await jouer(r.audio,r.reponse)}
-  catch(e){afficher("Je crains d'avoir perdu la liaison, "+appellation+".");statut("veille")}
+  try{const r=await lireJson(await fetch("/api/parler",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique})}));
+    if(!r.erreur)historique.push({role:"user",content:q},{role:"assistant",content:r.reponse});
+    afficher(r.reponse);if(r.erreur)afficherAide("Détail : "+r.erreur);if(r.tache_ajoutee)charger(true);dernierAudio=r.audio;await jouer(r.audio,r.reponse)}
+  catch(e){afficher("Je crains d'avoir perdu la liaison avec le serveur, "+appellation+".");afficherAide(String(e.message||e));statut("veille")}
   occupe=false;transcript(INVITE)}
 $("#form").onsubmit=e=>{e.preventDefault();demander($("#q").value)};
 async function briefing(){if(occupe)return;occupe=true;statut("briefing");afficher("Je compile votre briefing, "+appellation+"…");
-  try{const r=await fetch("/api/briefing",{method:"POST"});if(!r.ok)throw 0;const b=await r.json();afficher(b.texte);await charger();await jouer(b.audio,b.texte)}
-  catch(e){afficher("Le briefing n'a pas pu être généré. Lancez « jarvis-thibault verifier ».");statut("veille")}occupe=false}
+  try{const b=await lireJson(await fetch("/api/briefing",{method:"POST"}));afficher(b.texte);if(b.erreur_voix)afficherAide("Voix : "+b.erreur_voix);await charger();await jouer(b.audio,b.texte)}
+  catch(e){afficher("Le briefing n'a pas pu être généré, "+appellation+".");afficherAide(String(e.message||e));statut("veille")}occupe=false}
 $("#btnBriefing").onclick=briefing;
 $("#btnEcouter").onclick=()=>{const b=ETAT?.briefing;if(!b)return afficher("Aucun briefing pour l'instant.");afficher(b.texte);jouer(b.audio,b.texte)};
 
