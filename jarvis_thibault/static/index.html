@@ -511,25 +511,26 @@ const CERVEAU=(function(){
     aretes.push(ar);regions.push({k,a,cx,cy,cz,act:.4,flash:0,deb,fin})});
   // filaments libres : naissent, ondulent, meurent
   const fils=[];
-  function nouveauFil(vers){const a=vers!=null?REG[vers][1]+rnd(-.35,.35):rnd(0,6.2832),zz=rnd(-.6,.6),dx=Math.cos(a),dy=Math.sin(a)*.9,L=vers!=null?rnd(2.4,3.4):rnd(2.0,5.2);
-    return{a,dx,dy,zz,L,cur:rnd(-1.6,1.6),amp:rnd(.15,.55),fq:rnd(.3,1.1),ph:rnd(0,6.28),v:rnd(.06,.2),w:rnd(.8,2.3),b:Math.random(),
-      ne:performance.now()/1000,vie:vers!=null?rnd(3,5):rnd(7,16),pousse:rnd(.8,2.2),region:vers,chaud:vers!=null}}
+  let angleEclat=Math.PI;
+  function nouveauFil(vers){const a=vers!=null?REG[vers][1]+rnd(-.35,.35):(Math.random()<.45?angleEclat+rnd(-.95,.95):rnd(0,6.2832)),zz=rnd(-.6,.6),dx=Math.cos(a),dy=Math.sin(a)*.9,L=vers!=null?rnd(2.4,3.4):rnd(2.0,5.2);
+    return{a,dx,dy,zz,L,cur:rnd(-1.6,1.6),amp:rnd(.35,1.15),fq:rnd(.9,2.5),ph:rnd(0,6.28),v:rnd(.12,.36),w:rnd(.8,2.3),b:Math.random(),
+      ne:performance.now()/1000,vie:vers!=null?rnd(2.5,4):rnd(4,10),pousse:rnd(.5,1.4),region:vers,chaud:vers!=null}}
   for(let i=0;i<NF;i++){const f=nouveauFil();f.ne-=rnd(0,f.vie);fils.push(f)}
   const etincelles=[],ondes=[];
   const etoiles=Array.from({length:mob?90:220},()=>[Math.random(),Math.random(),Math.random()]);
-  let proj=null,S=1,C={x:0,y:0},cache={},dernierT=0;
+  let proj=null,S=1,C={x:0,y:0},cache={},dernierT=0,PN=[],flash=0;
   function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
   function centre(){const mobile=innerWidth<860,z=$(".centre"),r=z&&!mobile?z.getBoundingClientRect():null;
     const larg=r&&r.width>200?r.width:innerWidth;S=Math.min(larg/6.4,innerHeight*.125);if(mobile)S=Math.min(innerWidth/7,innerHeight*.12);
     C={x:r&&r.width>200?r.left+r.width/2:innerWidth/2,y:innerHeight*(mobile?.36:.46)};return{x:C.x,y:C.y,r:S}}
   function pointFil(f,u,tt){// point 3D le long du filament u∈[0,1], avec ondulation libre
-    const px=-f.dy,py=f.dx,base=.85+u*(f.L-.85),courbe=Math.sin(u*Math.PI)*f.cur,ond=Math.sin(tt*f.fq+u*4+f.ph)*f.amp*u;
+    const px=-f.dy,py=f.dx,base=.85+u*(f.L-.85),courbe=Math.sin(u*Math.PI)*f.cur,ond=(Math.sin(tt*f.fq+u*4+f.ph)+.4*Math.sin(tt*f.fq*1.9+u*9+f.ph*2))*f.amp*u;
     return[f.dx*base+px*(courbe+ond),f.dy*base+py*(courbe+ond),f.zz*(.5+u*1.2)]}
   function eclat(region){const i=IDX[region];if(i==null)return;regions[i].flash=1.4;
     for(let k=0;k<7;k++)fils.push(nouveauFil(i));ondes.push({t:performance.now()/1000,col:i});
     for(let k=0;k<14;k++){const n=regions[i].deb+((Math.random()*(regions[i].fin-regions[i].deb))|0);etincelles.push({n,t:performance.now()/1000,d:rnd(.6,1.4)})}}
   function dessiner(t){const pal=PAL[COULEURS]||PAL.video,L=ORBE.niveau,mode=ORBE.mode,tt=t/1000;centre();
-    const ay=Math.sin(tt*.11)*.42,ax=.12+Math.sin(tt*.07)*.08,cy_=Math.cos(ay),sy=Math.sin(ay),cx_=Math.cos(ax),sx=Math.sin(ax);
+    S*=1+.025*Math.sin(tt*.9);const ay=Math.sin(tt*.16)*.55,ax=.15+Math.sin(tt*.11)*.12,cy_=Math.cos(ay),sy=Math.sin(ay),cx_=Math.cos(ax),sx=Math.sin(ax);
     proj=(p)=>{const x1=p[0]*cy_+p[2]*sy,z1=-p[0]*sy+p[2]*cy_,y1=p[1]*cx_-z1*sx,z2=p[1]*sx+z1*cx_,k=4.2/(4.2+z2);return[C.x+x1*S*k,C.y+y1*S*k,z2,k]};
     g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);g.setTransform(dpr,0,0,dpr,0,0);
     g.globalCompositeOperation="source-over";g.fillStyle="rgba(200,225,255,.5)";
@@ -543,15 +544,17 @@ const CERVEAU=(function(){
       if(Math.random()<.04+r.act*.05){const n=r.deb+((Math.random()*(r.fin-r.deb))|0);etincelles.push({n,t:tt,d:rnd(.5,1.2)})}});
     g.globalCompositeOperation="lighter";
     // constellations
+    PN=noeuds.map(n=>proj([n.x+Math.sin(tt*.7+n.ph)*.08,n.y+Math.cos(tt*.55+n.ph*1.3)*.08,n.z+Math.sin(tt*.45+n.ph*.7)*.08]));
     regions.forEach((r,ri)=>{const col=pal[ri],ar=aretes[ri],a=Math.min(1.4,r.act);
-      g.lineWidth=1.3;g.strokeStyle=hexA(col,Math.min(1,.5+.5*a));g.beginPath();
-      ar.forEach(([i,j])=>{const A=noeuds[i],B=noeuds[j],P=proj([A.x,A.y,A.z]),Q=proj([B.x,B.y,B.z]);g.moveTo(P[0],P[1]);g.lineTo(Q[0],Q[1])});g.stroke();
-      g.fillStyle=hexA(col,.8);
-      for(let i=r.deb;i<r.fin;i++){const n=noeuds[i],P=proj([n.x,n.y,n.z]),s=(n.big?3.6:2)*P[3]*(1+.25*Math.sin(tt*2+n.ph));g.fillRect(P[0]-s/2,P[1]-s/2,s,s)}
+      g.lineWidth=.95;g.strokeStyle=hexA(col,Math.min(.95,.42+.45*a));g.beginPath();
+      ar.forEach(([i,j])=>{const P=PN[i],Q=PN[j];g.moveTo(P[0],P[1]);g.lineTo(Q[0],Q[1])});g.stroke();
+      for(let i=r.deb;i<r.fin;i++){const n=noeuds[i],P=PN[i],sc=.6+.4*Math.sin(tt*2.2+n.ph*3);
+        if(n.big){g.fillStyle=hexA("#ffffff",.55*sc+.2);g.beginPath();g.arc(P[0],P[1],1.9*P[3],0,6.2832);g.fill()}
+        else{g.fillStyle=hexA(col,.55+.4*sc);g.fillRect(P[0]-.9,P[1]-.9,1.8,1.8)}}
       const P=proj([r.cx,r.cy,r.cz]);cache[r.k]={x:P[0],y:P[1]+S*.5,clair:hexA(col,1),bord:hexA(col,.75),actif:a}});
     // étincelles (neurones qui naissent / s'allument)
     for(let k=etincelles.length-1;k>=0;k--){const e=etincelles[k],age=(tt-e.t)/e.d;if(age>1||age<0){etincelles.splice(k,1);continue}
-      const n=noeuds[e.n],P=proj([n.x,n.y,n.z]),col=pal[n.r],a=1-age;
+      const n=noeuds[e.n],P=PN[e.n]||proj([n.x,n.y,n.z]),col=pal[n.r],a=1-age;
       g.fillStyle=hexA("#ffffff",a*.9);g.beginPath();g.arc(P[0],P[1],1.5+2.5*a,0,6.2832);g.fill();
       g.strokeStyle=hexA(col,a*.8);g.lineWidth=1;g.beginPath();g.arc(P[0],P[1],3+age*14,0,6.2832);g.stroke()}
     if(etincelles.length>400)etincelles.splice(0,etincelles.length-400);
@@ -572,21 +575,32 @@ const CERVEAU=(function(){
     // ondes de choc (événements)
     for(let k=ondes.length-1;k>=0;k--){const o=ondes[k],age=(tt-o.t)/1.6;if(age>1){ondes.splice(k,1);continue}
       g.strokeStyle=hexA(pal[o.col],(1-age)*.6);g.lineWidth=2*(1-age)+.5;g.beginPath();g.ellipse(C.x,C.y,S*(1.1+age*3),S*(1+age*2.7),0,0,6.2832);g.stroke()}
-    // noyau
-    g.globalCompositeOperation="source-over";g.beginPath();
-    for(let i=0;i<=72;i++){const a=i/72*6.2832,r=S*(1+.06*Math.sin(a*3+tt*.7)+.04*Math.sin(a*7-tt*1.1)+.03*Math.sin(a*11+tt*.4)+L*.05*Math.sin(a*5+tt*6));
-      const x=C.x+Math.cos(a)*r*1.08,y=C.y+Math.sin(a)*r;i?g.lineTo(x,y):g.moveTo(x,y)}
-    gr=g.createRadialGradient(C.x-S*.2,C.y-S*.15,S*.1,C.x,C.y,S*1.1);gr.addColorStop(0,"#2650f0");gr.addColorStop(.5,"#1638c8");gr.addColorStop(.88,"#112ca8");gr.addColorStop(1,"#3a6cff");
-    g.fillStyle=gr;g.fill();
-    // lumière sur le bord du noyau (explose quand Jarvis parle)
-    g.globalCompositeOperation="lighter";const ra=Math.PI+Math.sin(tt*.35)*.5,force=.6+L*1.1+(mode==="reflexion"?.25:0);
-    for(let k=0;k<4;k++){g.strokeStyle=`rgba(${k<2?"220,245,255":"90,200,255"},${Math.min(1,(.5-k*.1)*force)})`;g.lineWidth=(10-k*2.2)*(1+L);
-      g.beginPath();g.ellipse(C.x,C.y,S*1.06,S*.98,0,ra-.9-L*.6,ra+.9+L*.6);g.stroke()}
-    const rx=C.x+Math.cos(ra)*S*1.05,ry=C.y+Math.sin(ra)*S;gr=g.createRadialGradient(rx,ry,0,rx,ry,S*(1.3+L*1.8));
-    gr.addColorStop(0,`rgba(255,255,255,${Math.min(.95,.6+L*.35)})`);gr.addColorStop(.3,`rgba(140,225,255,${Math.min(.7,.32+L*.35)})`);gr.addColorStop(1,"rgba(40,120,255,0)");
-    g.fillStyle=gr;g.beginPath();g.arc(rx,ry,S*(1.3+L*1.8),0,6.2832);g.fill();
-    const rb=ra+Math.PI*.85+Math.sin(tt*.5)*.3,bx=C.x+Math.cos(rb)*S,by=C.y+Math.sin(rb)*S*.9;gr=g.createRadialGradient(bx,by,0,bx,by,S*(1+L*1.4));
-    gr.addColorStop(0,`rgba(220,245,255,${.22+L*.3})`);gr.addColorStop(1,"rgba(60,140,255,0)");g.fillStyle=gr;g.beginPath();g.arc(bx,by,S*(1+L*1.4),0,6.2832);g.fill();
+    // noyau : nuage bleu plat, bords irréguliers et mouvants
+    g.globalCompositeOperation="source-over";
+    const forme=(ech,col,al)=>{g.beginPath();for(let i=0;i<=96;i++){const an=i/96*6.2832,
+        rr=S*ech*(1+.09*Math.sin(an*3+tt*.6)+.06*Math.sin(an*5-tt*.9)+.045*Math.sin(an*9+tt*1.4)+.03*Math.sin(an*14-tt*.8)+L*.06*Math.sin(an*6+tt*7));
+        const x=C.x+Math.cos(an)*rr*1.1,y=C.y+Math.sin(an)*rr;i?g.lineTo(x,y):g.moveTo(x,y)}g.globalAlpha=al;g.fillStyle=col;g.fill();g.globalAlpha=1};
+    forme(1.16,"#2b5cff",.28);forme(1.07,"#2250f0",.55);forme(1,"#1c45e2",.96);
+    for(let k=0;k<6;k++){const an=k*1.05+tt*.12*(k%2?1:-1),d=S*(.25+.3*((k*37)%10)/10),x=C.x+Math.cos(an)*d,y=C.y+Math.sin(an)*d*.9,rr=S*(.35+.1*Math.sin(tt*.7+k));
+      gr=g.createRadialGradient(x,y,0,x,y,rr);gr.addColorStop(0,k%2?"rgba(12,32,150,.35)":"rgba(80,130,255,.22)");gr.addColorStop(1,"rgba(30,70,230,0)");
+      g.fillStyle=gr;g.beginPath();g.arc(x,y,rr,0,6.2832);g.fill()}
+    // bande électrique sur le bord (crépite, explose quand Jarvis parle ou par moments)
+    g.globalCompositeOperation="lighter";
+    const ra=Math.PI+Math.sin(tt*.3)*.6+Math.sin(tt*.07)*.4;angleEclat=ra;
+    if(Math.random()<.0035)flash=1;flash*=.93;
+    const force=.65+L*1.2+flash*1.2+(mode==="reflexion"?.25:0),span=.7+L*.55+flash*.4;
+    const rx=C.x+Math.cos(ra)*S*1.12,ry=C.y+Math.sin(ra)*S;gr=g.createRadialGradient(rx,ry,0,rx,ry,S*(1.1+L*1.6+flash*1.5));
+    gr.addColorStop(0,`rgba(255,255,255,${Math.min(.95,.45+L*.4+flash*.4)})`);gr.addColorStop(.3,`rgba(130,220,255,${Math.min(.75,.3+L*.35+flash*.3)})`);gr.addColorStop(1,"rgba(40,120,255,0)");
+    g.fillStyle=gr;g.beginPath();g.arc(rx,ry,S*(1.1+L*1.6+flash*1.5),0,6.2832);g.fill();
+    for(let k=0;k<6;k++){const a0=ra-span+Math.random()*.25,a1=ra+span-Math.random()*.25,pts=[];
+      for(let i=0;i<=18;i++){const an=a0+(a1-a0)*i/18,j=(Math.random()-.5)*S*.13*(1+L+flash),rr=S*1.05+j;pts.push([C.x+Math.cos(an)*rr*1.1,C.y+Math.sin(an)*rr])}
+      [[8*(1+L),`rgba(80,190,255,${Math.min(.5,.16*force)})`],[3,`rgba(160,230,255,${Math.min(.8,.35*force)})`],[1.3,`rgba(255,255,255,${Math.min(1,.75*force)})`]].forEach(([lw,c])=>{
+        g.lineWidth=lw;g.strokeStyle=c;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke()})}
+    g.strokeStyle=`rgba(225,247,255,${Math.min(.9,.4*force)})`;g.lineWidth=1.2;g.beginPath();
+    for(let k=0;k<14+L*40+flash*40;k++){const an=ra+rnd(-span,span),r0=S*1.07,len=S*rnd(.12,.55)*(1+L*1.6+flash),x0=C.x+Math.cos(an)*r0*1.1,y0=C.y+Math.sin(an)*r0;
+      g.moveTo(x0,y0);g.lineTo(x0+Math.cos(an+rnd(-.3,.3))*len,y0+Math.sin(an+rnd(-.3,.3))*len)}g.stroke();
+    const rb=ra+Math.PI*.9+Math.sin(tt*.5)*.3,bx=C.x+Math.cos(rb)*S*1.05,by=C.y+Math.sin(rb)*S*.95;gr=g.createRadialGradient(bx,by,0,bx,by,S*(.9+L*1.2));
+    gr.addColorStop(0,`rgba(220,245,255,${.18+L*.3})`);gr.addColorStop(1,"rgba(60,140,255,0)");g.fillStyle=gr;g.beginPath();g.arc(bx,by,S*(.9+L*1.2),0,6.2832);g.fill();
     g.globalCompositeOperation="source-over";
     if(lueur){const lw=Math.max(1,innerWidth/2|0),lh=Math.max(1,innerHeight/2|0);if(lueur.width!==lw||lueur.height!==lh){lueur.width=lw;lueur.height=lh}
       lg.globalCompositeOperation="copy";lg.drawImage(cv,0,0,lw,lh)}}
