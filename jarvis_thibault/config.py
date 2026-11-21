@@ -53,7 +53,10 @@ DEFAUTS: Dict[str, Any] = {
         "fichier_taches": "fixigo.md",
         "base": {"active": False, "indicateurs": []},
     },
-    "ecran": {"forme": "cerveau", "couleurs": "video"},
+    "ecran": {"forme": "cerveau", "couleurs": "video", "plein_ecran": False},
+    "rappels": {"avant_rdv": 10},
+    "bilan": {"actif": True, "heure": "19:30", "lecture_auto": False},
+    "ecoute": {"transcription": "gpt-4o-mini-transcribe"},
     "serveur": {"port": 8765},
 }
 

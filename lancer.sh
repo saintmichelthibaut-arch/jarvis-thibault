@@ -13,13 +13,13 @@ if ! curl -s -o /dev/null "$URL"; then
 fi
 [[ "${1:-}" == "--silencieux" ]] && exit 0
 
-# 1) L'app « Jarvis Écran » créée avec Safari (Fichier → Ajouter au Dock)
-for ECRAN in "$HOME/Applications/Jarvis Écran.app" "$HOME/Applications/Jarvis Ecran.app"; do
-  if [[ -d "$ECRAN" ]]; then open "$ECRAN"; exit 0; fi
-done
-# 2) Sinon Chrome en mode application (fenêtre sans onglets ni barre d'adresse)
+# 1) La vraie app Jarvis (fenêtre à elle, sans navigateur)
+if [[ -x "$HOME/Applications/Jarvis.app/Contents/MacOS/Jarvis" ]] && ! grep -q "osascript\|applet" "$HOME/Applications/Jarvis.app/Contents/MacOS/Jarvis" 2>/dev/null; then
+  open "$HOME/Applications/Jarvis.app"; exit 0
+fi
+# 2) Sinon Chrome en mode application
 if [[ -d "/Applications/Google Chrome.app" ]]; then
-  open -na "Google Chrome" --args --app="$URL" --start-fullscreen
+  open -na "Google Chrome" --args --app="$URL"
   exit 0
 fi
 # 3) Sinon le navigateur par défaut

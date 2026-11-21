@@ -51,7 +51,7 @@ if cle == "base_url":
 EOF
 unset VAL
 echo "✓ Clé enregistrée. Redémarrage de Jarvis…"
-pkill -f "jarvis-thibault serveur" 2>/dev/null || true
+pkill -f "jarvis-thibault serveur" 2>/dev/null; pkill -f "jarvis_thibault.cli serveur" 2>/dev/null; true
 sleep 1
 bash "$JH/app/lancer.sh" --silencieux
 "$JH/app/.venv/bin/jarvis-thibault" verifier 2>&1 | head -6

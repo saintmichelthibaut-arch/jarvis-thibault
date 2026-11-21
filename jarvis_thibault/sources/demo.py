@@ -62,7 +62,11 @@ def stripe_demo() -> Dict[str, Any]:
             "ca_mois": 7340.0, "ca_mois_prec_meme_periode": 6120.0,
             "nouveaux_clients_aujourdhui": 0, "nouveaux_clients_hier": 3,
             "nouveaux_clients_7j": 14, "nouveaux_clients_mois": 31, "mrr": 3870.0,
-            "abonnements_actifs": 129, "essais_en_cours": 11, "paiements_echoues_7j": 2}
+            "abonnements_actifs": 129, "essais_en_cours": 11, "paiements_echoues_7j": 2,
+            "ca_jours": [{"jour": (date.today() - timedelta(days=13 - i)).isoformat(), "montant": m}
+                         for i, m in enumerate([180, 260, 95, 410, 330, 0, 120, 290, 455, 380, 610, 270, 412, 0])],
+            "derniers_paiements": [{"quand": date.today().isoformat() + "T09:12", "montant": 49.0},
+                                   {"quand": date.today().isoformat() + "T08:40", "montant": 29.0}]}
 
 
 def base_demo() -> List[Dict[str, Any]]:

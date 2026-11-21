@@ -11,6 +11,33 @@ En plus du briefing, il y a un **tableau de bord plein écran** avec l'orbe anim
 
 Il est construit sur **OpenJarvis** et **Ollama** (l'IA tourne sur votre Mac), avec la voix d'OpenAI.
 
+## Ce que Jarvis sait faire
+
+**C'est une vraie app Mac** : l'icône **Jarvis** du Dock ouvre sa propre fenêtre, sans navigateur. Jarvis continue de veiller en arrière-plan même quand la fenêtre est fermée.
+
+**Il vous parle tout seul quand il le faut :**
+- le **briefing du matin** (7 h par défaut) et le **bilan du soir** (19 h 30) ;
+- **10 minutes avant chaque rendez-vous** : « Monsieur, la démo Fixigo commence dans 10 minutes, Lyon 3e. » ;
+- **à chaque paiement Fixigo** : « Ka-tching, Monsieur : 49 euros viennent de tomber. » Les nouveaux clients et les paiements échoués sont signalés aussi ;
+- **vos rappels** à l'heure dite.
+
+Chaque événement apparaît en notification en haut de l'écran et fait **flasher la zone du cerveau** qui le concerne.
+
+**Ce que vous pouvez lui dire** (barre espace, bouton Écoute puis « Jarvis, … », ou au clavier) :
+
+| Vous dites | Jarvis |
+|---|---|
+| « Fais-moi le briefing » · « Fais-moi le bilan » | lit le point complet |
+| « Combien on a encaissé cette semaine ? » · « Où en est le MRR ? » | répond avec les chiffres Stripe |
+| « Qu'est-ce que j'ai cet après-midi ? » | lit votre agenda |
+| « Ajoute une tâche urgente : relancer le plombier » | l'ajoute aux priorités Fixigo |
+| « J'ai fini de préparer la démo » | coche la tâche |
+| « Rappelle-moi à 15 h d'appeler le comptable » · « …dans 20 minutes de… » | programme un rappel vocal |
+| « Souviens-toi que je préfère les rendez-vous le matin » | le retient pour toujours (et s'en sert) |
+| « Qu'est-ce que je dois faire en priorité pour Fixigo ? » | vous donne un plan d'action |
+
+**Sur l'écran :** courbe des encaissements des 14 derniers jours, compte à rebours avant le prochain rendez-vous, état de chaque module, rappels à venir.
+
 ---
 
 ## Installation (environ 10 minutes)
@@ -20,7 +47,7 @@ Il est construit sur **OpenJarvis** et **Ollama** (l'IA tourne sur votre Mac), a
 3. Tapez `bash ` (avec l'espace), **glissez le fichier `installer.sh`** dans la fenêtre, puis appuyez sur **Entrée**.
 4. Répondez aux questions : ville, heure du briefing, objectif de MRR, choix du cerveau, puis vos clés.
 5. Faites les **2 réglages à la main** affichés à la fin (voir ci-dessous).
-6. Ouvrez l'app **Jarvis**, rangée dans le dossier *Applications* de votre dossier personnel. Jarvis démarrera ensuite tout seul à chaque ouverture de session.
+6. Ouvrez l'app **Jarvis**, rangée dans le dossier *Applications* de votre dossier personnel. Jarvis démarrera ensuite tout seul à chaque ouverture de session. Au premier « Parle », macOS demande l'accès au **micro** : acceptez.
 
 ### Les clés à préparer
 

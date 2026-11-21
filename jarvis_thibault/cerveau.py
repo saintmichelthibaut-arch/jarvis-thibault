@@ -7,7 +7,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -58,6 +58,14 @@ def collecter(cfg) -> Dict[str, Any]:
                 out["erreurs"][nom] = err
     now = datetime.now(ZoneInfo(cfg["moi"]["fuseau"]))
     out["horodatage"] = now.isoformat(timespec="seconds")
+    try:
+        from .vie import Memoire, Rappels
+
+        base = cfg.dossier / "demo" if cfg.demo else cfg.dossier
+        out["memoire"] = Memoire(base / "memoire.md").lire()[-40:]
+        out["rappels"] = Rappels(base / "rappels.json", cfg["moi"]["fuseau"]).a_venir()[:10]
+    except Exception:  # noqa: BLE001
+        out["memoire"], out["rappels"] = [], []
     out["objectifs_chiffres"] = {
         "mrr": cfg["fixigo"].get("objectif_mrr") or 0,
         "clients_mois": cfg["fixigo"].get("objectif_clients_mois") or 0,
@@ -151,6 +159,15 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
                     tags.append("priorité " + "haute" if x["priorite"] >= 3 else f"priorité {x['priorite']}/3")
                 L.append(f"  - {x['texte']}" + (f" [{', '.join(tags)}]" if tags else ""))
 
+    if s and s.get("ca_jours"):
+        L.append("FIXIGO — ENCAISSEMENTS PAR JOUR (14 j) : " + ", ".join(
+            f"{x['jour'][8:10]}/{x['jour'][5:7]} {x['montant']:.0f} €" for x in s["ca_jours"]))
+    if d.get("rappels"):
+        L.append("RAPPELS PROGRAMMÉS : " + " ; ".join(f"{r['quand'][11:16]} {r['texte']}" for r in d["rappels"]))
+    if d.get("memoire"):
+        L.append("CE QUE TU SAIS DE LUI (mémoire, à utiliser à bon escient) :")
+        L.extend(f"  - {m}" for m in d["memoire"])
+
     if d.get("erreurs"):
         L.append("SOURCES INDISPONIBLES (ne pas inventer ces infos) : " + ", ".join(d["erreurs"]))
     return "\n".join(L)
@@ -239,14 +256,95 @@ def repondre(cfg, message: str, historique: List[Dict[str, str]],
              donnees: Dict[str, Any]) -> str:
     ctx = contexte_texte(donnees, cfg)
     msgs = [{"role": "system", "content": persona(cfg)
-             + "\n\nDONNÉES À JOUR (ta seule source de vérité) :\n" + ctx
-             + f"\n\nSi {cfg['moi']['prenom']} te demande d'ajouter une tâche Fixigo, réponds en commençant "
-             "exactement par « [AJOUT_TACHE: texte de la tâche] » puis confirme avec style."}]
+             + "\n\nDONNÉES À JOUR (ta seule source de vérité) :\n" + ctx + "\n\n" + ACTIONS}]
     for h in historique[-12:]:
         if h.get("role") in ("user", "assistant") and h.get("content"):
             msgs.append({"role": h["role"], "content": h["content"][:2000]})
     msgs.append({"role": "user", "content": message})
     return generer(cfg, msgs, max_tokens=500)
+
+
+ACTIONS = """TES POUVOIRS — quand on te le demande, ajoute la ou les balises correspondantes AU DÉBUT de ta réponse, puis confirme naturellement :
+- [AJOUT_TACHE: texte]  → ajoute une tâche Fixigo (mets « !!! » devant le texte si c'est urgent, « @AAAA-MM-JJ » à la fin pour une échéance)
+- [TACHE_FAITE: mots-clés]  → coche une tâche terminée (« j'ai fini / c'est fait … »)
+- [MEMOIRE: fait à retenir]  → retient une information durable (« souviens-toi que… », préférences, personnes, objectifs)
+- [OUBLIE: mots-clés]  → efface un souvenir
+- [RAPPEL: HH:MM | texte]  → programme un rappel vocal (« rappelle-moi à 15 h de… » ; « dans 20 minutes » = calcule l'heure)
+- [BRIEFING]  → lance le briefing complet ; [BILAN]  → lance le bilan de la journée
+N'utilise une balise que si la demande est claire. N'en parle jamais à voix haute."""
+
+_BALISE = re.compile(r"\[(AJOUT_TACHE|TACHE_FAITE|MEMOIRE|OUBLIE|RAPPEL|BRIEFING|BILAN)(?:\s*:\s*([^\]]*))?\]")
+
+
+def extraire_actions(reponse: str) -> tuple[List[tuple[str, str]], str]:
+    """Sépare les balises d'action (où qu'elles soient) du texte à dire."""
+    actions = [(m.group(1), (m.group(2) or "").strip()) for m in _BALISE.finditer(reponse)]
+    texte = re.sub(r"\s{2,}", " ", _BALISE.sub("", reponse)).strip()
+    return actions, texte
+
+
+_NOMBRES = {"une": 1, "un": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "dix": 10, "quinze": 15,
+            "vingt": 20, "trente": 30, "quarante": 40, "quarante-cinq": 45, "cinquante": 50, "soixante": 60}
+
+
+def intentions(message: str, fuseau: str = "Europe/Paris") -> List[tuple[str, str]]:
+    """Détection fiable des commandes courantes, sans dépendre du modèle."""
+    t = " ".join(message.strip().split())
+    bas = t.casefold()
+    acts: List[tuple[str, str]] = []
+    # Rappels : « rappelle-moi à 15h30 de … », « rappelle-moi dans 20 minutes de … »
+    m = re.search(r"rappelle[- ]moi\s+(?:demain\s+)?(?:à|a|vers)\s+(\d{1,2})\s*(?:h|:|heures?)\s*(\d{2})?\s*(?:de |d'|d’|que |qu'|pour |:)?\s*(.*)", bas)
+    if m:
+        acts.append(("RAPPEL", f"{int(m.group(1)):02d}:{int(m.group(2) or 0):02d} | {t[m.start(3):].strip(' .!') or 'rappel'}"))
+    else:
+        m = re.search(r"rappelle[- ]moi\s+dans\s+(\d+|[a-z-]+)\s*(minutes?|min|heures?|h)\s*(?:de |d'|d’|que |qu'|pour |:)?\s*(.*)", bas)
+        if m:
+            n = int(m.group(1)) if m.group(1).isdigit() else _NOMBRES.get(m.group(1), 0)
+            if n:
+                quand = datetime.now(ZoneInfo(fuseau)) + (timedelta(hours=n) if m.group(2).startswith("h") else timedelta(minutes=n))
+                acts.append(("RAPPEL", f"{quand:%H:%M} | {t[m.start(3):].strip(' .!') or 'rappel'}"))
+    # Mémoire
+    m = re.search(r"(?:souviens[- ]toi|rappelle[- ]toi|retiens|n'oublie pas|n’oublie pas|note bien)\s+(?:que|qu'|qu’|de|bien que)?\s*(.+)", bas)
+    if m and "rappelle-moi" not in bas:
+        acts.append(("MEMOIRE", t[m.start(1):].strip(" .!")))
+    m = re.search(r"oublie\s+(?:que|qu'|qu’|ce que je t'ai dit sur|le souvenir)\s*(.+)", bas)
+    if m and not acts:
+        acts.append(("OUBLIE", t[m.start(1):].strip(" .!")))
+    # Tâches
+    m = re.search(r"ajoute(?:r)?\s+(?:une\s+|la\s+)?t[aâ]che\s*(?:fixigo)?\s*[:,]?\s*(?:de |d'|d’|pour |:)?\s*(.+)", bas)
+    if m:
+        urgent = "urgent" in bas or "important" in bas
+        texte = re.sub(r"^(?:urgente?|importante?)\s*[:,]?\s*", "", t[m.start(1):].strip(" .!"), flags=re.I)
+        acts.append(("AJOUT_TACHE", ("!!! " if urgent else "") + texte))
+    m = re.search(r"(?:j'ai|j’ai)\s+(?:fini|termin[ée]|bouclé|fait)\s+(?:de\s+|la\s+tâche\s+|la\s+tache\s+)?(.+)", bas)
+    if m:
+        acts.append(("TACHE_FAITE", t[m.start(1):].strip(" .!")))
+    # Briefing / bilan
+    if re.search(r"\b(briefing|r[ée]cap(?:itulatif)?)\b", bas) and not acts and len(bas) < 90:
+        acts.append(("BRIEFING", ""))
+    elif re.search(r"\bbilan\b", bas) and not acts and len(bas) < 90:
+        acts.append(("BILAN", ""))
+    return acts
+
+
+def _consigne_bilan() -> str:
+    return """Rédige le BILAN DU SOIR, à lire à voix haute (45 secondes, 100 à 160 mots) :
+1. Un mot pour clôturer la journée, avec humour léger.
+2. Fixigo aujourd'hui : ce qui a été encaissé et les nouveaux clients du jour s'ils sont fournis, la tendance des 14 derniers jours.
+3. Les tâches : ce qui reste ouvert et ce qu'il faudra attaquer en premier demain.
+4. Demain dans l'agenda, s'il y a quelque chose.
+5. Une phrase pour finir la soirée (repos, sport, famille…).
+Uniquement les données fournies, texte parlé fluide sans listes ni markdown."""
+
+
+def bilan(cfg, donnees: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    donnees = donnees or collecter(cfg)
+    ctx = contexte_texte(donnees, cfg)
+    texte = generer(cfg, [
+        {"role": "system", "content": persona(cfg)},
+        {"role": "user", "content": f"Voici les données :\n\n{ctx}\n\n{_consigne_bilan()}"},
+    ], max_tokens=700)
+    return {"texte": texte, "contexte": ctx, "horodatage": donnees["horodatage"], "type": "bilan"}
 
 
 _AJOUT = re.compile(r"\s*\[AJOUT_TACHE:\s*(.+?)\]\s*")
@@ -266,12 +364,19 @@ VERROU_BRIEFING = threading.Lock()
 
 def sauver_briefing(cfg, b: Dict[str, Any]) -> None:
     jour = b["horodatage"][:10]
-    (cfg.dossier_briefings / f"{jour}.json").write_text(
+    suffixe = "-bilan" if b.get("type") == "bilan" else ""
+    (cfg.dossier_briefings / f"{jour}{suffixe}.json").write_text(
         json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def dernier_briefing(cfg) -> Optional[Dict[str, Any]]:
-    fichiers = sorted(cfg.dossier_briefings.glob("*.json"))
+def dernier_briefing(cfg, type_: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Le dernier briefing (type_="briefing"), le dernier bilan ("bilan") ou le plus récent des deux."""
+    fichiers = list(cfg.dossier_briefings.glob("*.json"))
+    if type_ == "briefing":
+        fichiers = [f for f in fichiers if not f.stem.endswith("-bilan")]
+    elif type_ == "bilan":
+        fichiers = [f for f in fichiers if f.stem.endswith("-bilan")]
     if not fichiers:
         return None
-    return json.loads(fichiers[-1].read_text(encoding="utf-8"))
+    f = max(fichiers, key=lambda x: x.stat().st_mtime)
+    return json.loads(f.read_text(encoding="utf-8"))

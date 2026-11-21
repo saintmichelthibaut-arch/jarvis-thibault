@@ -70,6 +70,15 @@ panneau = "semaine"
 [ecran]
 forme = "cerveau"        # "cerveau" (comme la vidéo) ou "sphere" (sphère de particules)
 couleurs = "video"       # "video" (multicolore) ou "bleu" (tout en bleu)
+plein_ecran = false      # true : l'app Jarvis s'ouvre en plein écran
+
+[rappels]
+avant_rdv = 10           # Jarvis annonce chaque rendez-vous X minutes avant (0 = jamais)
+
+[bilan]
+actif = true             # bilan de la journée chaque soir
+heure = "19:30"
+lecture_auto = false     # true : il le lit à voix haute tout seul
 
 [serveur]
 port = 8765

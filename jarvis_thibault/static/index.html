@@ -22,7 +22,7 @@ html,body{height:100%;background:radial-gradient(ellipse 90% 80% at 50% 46%,#0a2
 .coin.bg{bottom:18px;left:18px;border-width:0 0 1.5px 1.5px}.coin.bd{bottom:18px;right:18px;border-width:0 1.5px 1.5px 0}
 
 .ecran{position:relative;z-index:2;height:100%;display:grid;
-  grid-template-columns:minmax(260px,310px) minmax(0,1fr) minmax(260px,310px) 150px;grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-columns:minmax(250px,290px) minmax(0,1fr) minmax(250px,290px) 140px;grid-template-rows:auto minmax(0,1fr) auto;
   gap:18px 20px;padding:30px 44px 26px}
 
 /* ─── En-tête ─── */
@@ -124,6 +124,18 @@ form.transcript input::placeholder{color:var(--tres-doux)}
 button.b{font:700 9.5px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--label);background:rgba(8,22,60,.7);border:1px solid var(--bord);
   padding:8px 12px;cursor:pointer;min-height:34px}
 button.b:hover,button.b.on{background:var(--puce);color:#fff;box-shadow:0 0 16px rgba(80,150,255,.5)}
+.toasts{position:fixed;top:84px;left:50%;transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{display:flex;align-items:center;gap:12px;min-width:280px;max-width:520px;padding:9px 16px;background:rgba(4,12,48,.86);border:1px solid var(--c,#7fd3ff);
+  box-shadow:0 0 24px color-mix(in srgb,var(--c,#7fd3ff) 45%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:toastIn .45s cubic-bezier(.2,.9,.2,1)}
+.toast.sort{animation:toastOut .5s forwards}
+.toast i{width:8px;height:8px;border-radius:50%;background:var(--c,#7fd3ff);box-shadow:0 0 10px var(--c,#7fd3ff);flex:0 0 8px}
+.toast b{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--c,#7fd3ff);white-space:nowrap}
+.toast span{font-size:12.5px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes toastIn{from{opacity:0;transform:translateY(-14px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-10px)}}
+.spark svg{width:100%;height:34px;display:block;margin-top:8px}
+.spark rect{fill:rgba(127,211,255,.5)}.spark rect.auj{fill:#fff}
+.rappel{font-size:10.5px;color:var(--cyan);letter-spacing:.04em;padding-top:6px;border-top:1px solid var(--bord-doux);margin-top:4px}
 .demo{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:4;font-size:8.5px;letter-spacing:.3em;color:var(--doux)}
 
 #boot{position:fixed;inset:0;z-index:10;background:var(--fond);display:flex;align-items:center;justify-content:center;transition:opacity .7s}
@@ -138,7 +150,7 @@ button.b:hover,button.b.on{background:var(--puce);color:#fff;box-shadow:0 0 16px
   header{grid-template-columns:minmax(0,1fr) auto;gap:14px}.marque .nom{font-size:15px;letter-spacing:.32em}.marque .ss{letter-spacing:.12em}.bandeau{grid-column:1/-1;grid-row:2;justify-content:center;flex-wrap:wrap}
   .lune{display:none}.centre{order:-1;min-height:60vh}header{order:-2}
   .col.gauche,.col.droite{padding-top:0;overflow:visible}.modules{display:none}.noeuds{display:none}
-  footer{grid-template-columns:1fr}.pied{display:none}.coin{display:none}#hud{display:none}
+  footer{grid-template-columns:1fr}.pied{display:none}.coin{display:none}
   .etat{white-space:nowrap;letter-spacing:.2em}.demo{position:static;transform:none;text-align:center;padding:14px 0}
 }
 </style>
@@ -185,6 +197,7 @@ button.b:hover,button.b.on{background:var(--puce);color:#fff;box-shadow:0 0 16px
     </div>
   </footer>
 </div>
+<div class="toasts" id="toasts"></div>
 <div class="demo" id="demo" hidden>MODE DÉMO · DONNÉES FICTIVES</div>
 
 <script>
@@ -235,7 +248,11 @@ function rendre(){
     h+=kpi("Nouveaux clients",s.nouveaux_clients_7j,nb,"","",`${nb(s.nouveaux_clients_mois)} ce mois`)+kpi("Encaissé",s.ca_7j,x=>eur(x,dv),"fort","",`mois : ${eur(s.ca_mois,dv)}`)
       +kpi("MRR",s.mrr,x=>eur(x,dv),"",v,`${nb(s.abonnements_actifs)} abonnés · ${nb(s.essais_en_cours)} essais`);
     if(o.mrr){const p=Math.min(100,s.mrr/o.mrr*100);h+=`<div class="barre"><i style="width:${p}%"></i></div><div class="leg"><span>objectif ${eur(o.mrr,dv)}</span><span>${p.toFixed(0)} %</span></div>`}
-    if(s.paiements_echoues_7j)h+=kpi("Paiements échoués",s.paiements_echoues_7j,nb,"","","à relancer");}
+    if(s.paiements_echoues_7j)h+=kpi("Paiements échoués",s.paiements_echoues_7j,nb,"","","à relancer");
+    if(s.ca_jours&&s.ca_jours.length){const mx=Math.max(1,...s.ca_jours.map(j=>j.montant)),n=s.ca_jours.length,w=100/n;
+      h+=`<div class="spark"><svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">${s.ca_jours.map((j,i)=>{const hh=Math.max(1.2,j.montant/mx*29);
+        return `<rect x="${(i*w+.7).toFixed(2)}" y="${(30-hh).toFixed(2)}" width="${(w-1.4).toFixed(2)}" height="${hh.toFixed(2)}" class="${i===n-1?"auj":""}"></rect>`}).join("")}</svg>
+        <div class="leg"><span>encaissé · 14 jours</span><span>record ${eur(mx,dv)}</span></div></div>`}}
   base.filter(i=>i.panneau==="semaine").forEach(i=>h+=kpi(i.nom,i.valeur,fmtInd(i)));
   $("#semaine").innerHTML=(h||`<div class="vide">Stripe non connecté.</div>`)+erreur("stripe");
 
@@ -245,7 +262,10 @@ function rendre(){
   $("#hier").innerHTML=(h||`<div class="vide">Aucune donnée.</div>`)+erreur("base");
 
   const a=d.agenda,hm=new Date().toTimeString().slice(0,5);
-  if(a){$("#nbEvt").textContent=`${a.aujourdhui.length} rdv`;
+  if(a){const pro=a.aujourdhui.find(e=>!e.journee&&e.debut>hm);let lib=`${a.aujourdhui.length} rdv`;
+    if(pro){const[hh,mm]=pro.debut.split(":").map(Number),n=new Date(),dm=Math.round((new Date(n.getFullYear(),n.getMonth(),n.getDate(),hh,mm)-n)/60000);
+      lib=dm<=180?`dans ${dm<60?dm+" min":Math.floor(dm/60)+" h "+deux(dm%60)}`:lib}
+    $("#nbEvt").textContent=lib;
     $("#agenda").innerHTML=a.aujourdhui.length?a.aujourdhui.slice(0,6).map(e=>{const c=!e.journee&&e.fin&&e.fin<=hm?"passe":(!e.journee&&e.debut<=hm&&(!e.fin||e.fin>hm)?"maintenant":"");
       return `<div class="evt ${c}"><span class="t">${e.journee?"jour":e.debut}</span><span class="x">${esc(e.titre)}${e.lieu?`<small>${esc(e.lieu)}</small>`:""}</span></div>`}).join("")
       +(a.demain.length?`<div class="leg" style="padding-top:6px;border-top:1px solid var(--bord-doux)"><span>demain · ${esc(a.demain[0].journee?"":a.demain[0].debut+" ")}${esc(a.demain[0].titre)}</span></div>`:"")
@@ -260,6 +280,7 @@ function rendre(){
     let html="";if(ouv[0])html+=`<div class="citation"><span class="n">Priorité<br>n°1</span><q>${esc(ouv[0].texte)}</q></div>`;
     html+=t.taches.filter(x=>x!==ouv[0]).slice(0,3).map(x=>{let g="";if(x.en_retard)g+=`<span class="tag retard">retard</span>`;else if(x.aujourdhui)g+=`<span class="tag">auj.</span>`;
       if(x.priorite>=2)g+=`<span class="tag">p${x.priorite}</span>`;return `<button class="tache ${x.fait?"fait":""}" data-l="${x.ligne}"><span class="cb"></span><span>${esc(x.texte)}${g}</span></button>`}).join("");
+    (d.rappels||[]).slice(0,2).forEach(r=>html+=`<div class="rappel">rappel · ${esc(r.quand.slice(11,16))} · ${esc(r.texte)}</div>`);
     $("#taches").innerHTML=html||`<div class="vide">Aucune tâche. Dites « ajoute une tâche… »</div>`;
     document.querySelectorAll(".tache").forEach(el=>el.onclick=async()=>{await fetch(`/api/taches/${el.dataset.l}/basculer`,{method:"POST"});charger()});
   }else $("#taches").innerHTML=erreur("taches");
@@ -281,7 +302,7 @@ const NOEUDS=(function(){const box=$("#noeuds");let items=[];
   return{maj(d){const s=d.stripe,a=d.agenda,m=d.meteo,t=d.taches;
     const L={agenda:["Agenda",a?`${a.aujourdhui.length} rendez-vous`:"hors ligne"],stripe:["Stripe",s?`${eur(s.ca_7j,s.devise)} · 7 j`:"hors ligne"],
       langage:["Langage","français · fr-FR"],mrr:["MRR",s?eur(s.mrr,s.devise):"—"],priorites:["Priorités",t?`${t.taches.filter(x=>!x.fait).length} tâches ouvertes`:"—"],
-      memoire:["Mémoire",`${historique.length/2|0} échanges`],meteo:["Météo",m?`${m.maintenant}° · ${m.description}`:"—"],raison:["Raisonnement",(ETAT&&ETAT.cerveau)||"—"]};
+      memoire:["Mémoire",`${(d.memoire||[]).length} souvenirs · ${(d.rappels||[]).length} rappels`],meteo:["Météo",m?`${m.maintenant}° · ${m.description}`:"—"],raison:["Raisonnement",(ETAT&&ETAT.cerveau)||"—"]};
     items=Object.keys(L);box.innerHTML=items.map(k=>`<div class="noeud" id="nd-${k}">${esc(L[k][0])}<small>${esc(L[k][1])}</small></div>`).join("")},
   place(t,c){items.forEach((k,i)=>{const el=document.getElementById("nd-"+k);if(!el)return;let x,y;
       if(FORME==="cerveau"){const p=CERVEAU.ancre(k);if(!p){el.style.display="none";return}el.style.display="";x=p.x;y=p.y;
@@ -336,34 +357,76 @@ async function lireJson(r){let j=null;try{j=await r.json()}catch(e){}if(!r.ok&&!
 async function demander(q){if(!q.trim()||occupe)return;occupe=true;afficherAide("");transcript(q);afficher("…");statut("reflexion");
   try{const r=await lireJson(await fetch("/api/parler",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique})}));
     if(!r.erreur)historique.push({role:"user",content:q},{role:"assistant",content:r.reponse});
-    if(r.erreur){afficher(r.reponse);afficherAide("Détail : "+r.erreur)}if(r.tache_ajoutee)charger(true);dernierAudio=r.audio;await jouer(r.audio,r.reponse)}
+    if(r.erreur){afficher(r.reponse);afficherAide("Détail : "+r.erreur)}if((r.actions||[]).length)charger();dernierAudio=r.audio;await jouer(r.audio,r.reponse);
+    const lancer=(r.actions||[]).find(a=>a.type==="lancer");if(lancer){occupe=false;transcript(INVITE);return briefing(lancer.quoi)}}
   catch(e){afficher("Je crains d'avoir perdu la liaison avec le serveur, "+appellation+".");afficherAide(String(e.message||e));statut("veille")}
   occupe=false;transcript(INVITE)}
 $("#form").onsubmit=e=>{e.preventDefault();demander($("#q").value)};
-async function briefing(){if(occupe)return;occupe=true;afficherAide("");statut("briefing");afficher("Je compile votre briefing, "+appellation+"…");
-  try{const b=await lireJson(await fetch("/api/briefing",{method:"POST"}));await charger();const pj=jouer(b.audio,b.texte);if(b.erreur_voix)afficherAide("Voix : "+b.erreur_voix);await pj}
+async function briefing(type){type=type==="bilan"?"bilan":"briefing";if(occupe)return;occupe=true;afficherAide("");statut("briefing");
+  afficher((type==="bilan"?"Je prépare le bilan de la journée, ":"Je compile votre briefing, ")+appellation+"…");
+  try{const b=await lireJson(await fetch("/api/"+type,{method:"POST"}));await charger();const pj=jouer(b.audio,b.texte);if(b.erreur_voix)afficherAide("Voix : "+b.erreur_voix);await pj}
   catch(e){afficher("Le briefing n'a pas pu être généré, "+appellation+".");afficherAide(String(e.message||e));statut("veille")}occupe=false}
-$("#btnBriefing").onclick=briefing;
+$("#btnBriefing").onclick=()=>briefing("briefing");
 $("#btnEcouter").onclick=()=>{const b=ETAT?.briefing;if(!b)return afficher("Aucun briefing pour l'instant.");jouer(b.audio,b.texte)};
 
-/* ── Micro : espace pour parler, ou écoute permanente du mot « Jarvis » ── */
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let reco=null,ecoute=false,permanent=false,attente=false;
-function demarrerReco(){if(!SR){afficher("La dictée vocale demande Chrome ou Safari.");return}
+/* ── Micro : espace pour parler, ou écoute permanente du mot « Jarvis » ──
+   Deux moteurs : la dictée du navigateur (Chrome/Safari) ou, dans l'app Jarvis,
+   l'enregistrement du micro envoyé à la transcription (OpenAI). */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const DANS_APP=new URLSearchParams(location.search).has("app")||!!window.pywebview;
+const ENREG=DANS_APP||!SR;
+let reco=null,ecoute=false,permanent=false,attente=false;
+function commandeDepuis(t){const m=t.toLowerCase().match(/jarvis[\s,.!?]*(.*)$/);if(m){const cmd=t.slice(t.length-m[1].length).trim();
+    if(cmd)return demander(cmd);attente=true;afficher("Oui, "+appellation+" ?");return}
+  if(attente&&t.trim()){attente=false;demander(t.trim())}}
+/* -- moteur 1 : dictée du navigateur -- */
+function demarrerReco(){
   if(lecteur&&!lecteur.paused&&!permanent)lecteur.pause();
   reco=new SR();reco.lang="fr-FR";reco.interimResults=true;reco.continuous=permanent;let final="";
   reco.onstart=()=>{ecoute=true;if(!permanent){statut("ecoute");transcript("je vous écoute…")}};
   reco.onresult=e=>{let t="",fin=false;for(let i=e.resultIndex;i<e.results.length;i++){t+=e.results[i][0].transcript;fin=fin||e.results[i].isFinal}
     if(!permanent){final=t;transcript(t);return}
-    if(occupe)return;
-    const m=t.toLowerCase().match(/jarvis[\s,.!?]*(.*)$/);
-    if(m){if(statutLocal==="veille")statut("ecoute");transcript(m[1]||"…");
-      if(fin){const cmd=m[1].trim();if(cmd)demander(cmd);else{attente=true;afficher("Oui, "+appellation+" ?")}}}
-    else if(attente&&fin&&t.trim()){attente=false;demander(t.trim())}};
+    if(occupe)return;if(/jarvis/i.test(t)||attente){transcript(t);if(fin)commandeDepuis(t)}};
   reco.onend=()=>{ecoute=false;if(permanent){setTimeout(()=>permanent&&demarrerReco(),250);return}final.trim()?demander(final):statut("veille")};
   reco.onerror=()=>{};try{reco.start()}catch(e){}}
-function micro(){if(ecoute&&!permanent){reco.stop();return}if(permanent){permanent=false;$("#btnEcoute").classList.remove("on");try{reco.stop()}catch(e){}}demarrerReco()}
+/* -- moteur 2 : enregistrement + transcription -- */
+const MIC={flux:null,ctx:null,ana:null,buf:null,rec:null,morceaux:[],parle:false,silence:0,debut:0,niveau:0,boucle:null,mode:null};
+async function micOuvrir(){if(MIC.flux)return true;
+  try{MIC.flux=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
+  catch(e){afficher("Je n'ai pas accès au micro, "+appellation+".");afficherAide("Autorisez le micro pour Jarvis (Réglages Système → Confidentialité → Micro).");return false}
+  MIC.ctx=new(window.AudioContext||window.webkitAudioContext)();const src=MIC.ctx.createMediaStreamSource(MIC.flux);MIC.ana=MIC.ctx.createAnalyser();MIC.ana.fftSize=1024;
+  src.connect(MIC.ana);MIC.buf=new Float32Array(MIC.ana.fftSize);return true}
+function micNiveau(){MIC.ana.getFloatTimeDomainData(MIC.buf);let s=0;for(const v of MIC.buf)s+=v*v;return Math.sqrt(s/MIC.buf.length)}
+function micDemarrerEnreg(){const types=["audio/webm;codecs=opus","audio/webm","audio/mp4"];const type=types.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||"";
+  MIC.morceaux=[];MIC.rec=new MediaRecorder(MIC.flux,type?{mimeType:type}:undefined);MIC.rec.ondataavailable=e=>e.data.size&&MIC.morceaux.push(e.data);
+  MIC.rec.onstop=()=>{const blob=new Blob(MIC.morceaux,{type:MIC.rec.mimeType||"audio/webm"});const mode=MIC.mode;MIC.rec=null;envoyerVoix(blob,mode)};
+  MIC.rec.start();MIC.debut=performance.now();MIC.silence=0;MIC.parle=false}
+async function envoyerVoix(blob,mode){if(blob.size<3000){if(mode==="appui")statut("veille");return}
+  const ext=(blob.type||"").includes("mp4")?"m4a":"webm";const fd=new FormData();fd.append("audio",blob,"voix."+ext);
+  if(mode==="appui"){statut("reflexion");transcript("transcription…")}
+  try{const r=await fetch("/api/transcrire",{method:"POST",body:fd});const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.detail||("erreur "+r.status));const t=(j.texte||"").trim();
+    if(mode==="appui"){t?demander(t):(statut("veille"),transcript(INVITE))}else if(t&&(/jarvis/i.test(t)||attente)&&!occupe){transcript(t);commandeDepuis(t)}}
+  catch(e){statut("veille");afficher("Je n'ai pas compris, "+appellation+".");afficherAide(String(e.message||e))}}
+function micSurveiller(){clearInterval(MIC.boucle);MIC.boucle=setInterval(()=>{if(!MIC.ana)return;const n=micNiveau();MIC.niveau=n;
+    const seuil=MIC.mode==="appui"?.012:.02,ilParle=n>seuil;
+    if(MIC.mode==="permanent"&&(occupe||ORBE.mode==="parole")){if(MIC.rec&&MIC.rec.state==="recording"){MIC.morceaux=[];MIC.rec.onstop=()=>{MIC.rec=null};MIC.rec.stop()}return}
+    if(!MIC.rec&&MIC.mode==="permanent"&&ilParle)micDemarrerEnreg();
+    if(MIC.rec&&MIC.rec.state==="recording"){if(ilParle){MIC.parle=true;MIC.silence=0}else MIC.silence+=100;
+      const duree=performance.now()-MIC.debut,finSilence=MIC.parle?1200:(MIC.mode==="appui"?6000:800);
+      if(MIC.silence>=finSilence||duree>15000){MIC.rec.stop();if(MIC.mode==="appui"){MIC.mode=null;ecoute=false;clearInterval(MIC.boucle)}}}},100)}
+async function micAppui(){if(MIC.rec&&MIC.mode==="appui"){MIC.rec.stop();MIC.mode=null;ecoute=false;return}
+  if(!(await micOuvrir()))return;if(lecteur&&!lecteur.paused)lecteur.pause();
+  if(MIC.rec)try{MIC.rec.onstop=()=>{MIC.rec=null};MIC.rec.stop()}catch(e){}
+  MIC.mode="appui";ecoute=true;statut("ecoute");transcript("je vous écoute…");micDemarrerEnreg();micSurveiller()}
+async function micPermanent(on){if(!on){MIC.mode=null;clearInterval(MIC.boucle);if(MIC.rec)try{MIC.rec.stop()}catch(e){};return}
+  if(!(await micOuvrir())){permanent=false;$("#btnEcoute").classList.remove("on");return}MIC.mode="permanent";micSurveiller()}
+/* -- commandes -- */
+function micro(){if(ENREG)return micAppui();
+  if(ecoute&&!permanent){reco.stop();return}if(permanent){permanent=false;$("#btnEcoute").classList.remove("on");try{reco.stop()}catch(e){}}demarrerReco()}
 $("#btnEcoute").onclick=()=>{permanent=!permanent;$("#btnEcoute").classList.toggle("on",permanent);$("#ecouteTxt").textContent=permanent?"à l'écoute de « Jarvis »":"appuyez sur espace";
-  try{localStorage.setItem("jarvis-ecoute",permanent?"1":"0")}catch(e){}if(reco)try{reco.stop()}catch(e){};if(permanent)demarrerReco()};
+  try{localStorage.setItem("jarvis-ecoute",permanent?"1":"0")}catch(e){}
+  if(ENREG)return micPermanent(permanent);if(reco)try{reco.stop()}catch(e){};if(permanent)demarrerReco()};
 try{if(localStorage.getItem("jarvis-ecoute")==="1")setTimeout(()=>$("#btnEcoute").click(),1500)}catch(e){}
 document.addEventListener("keydown",e=>{if(e.code==="Space"&&document.activeElement!==$("#q")){e.preventDefault();micro()}});
 
@@ -373,6 +436,7 @@ const PALETTES={veille:[[.47,.80,1],[.12,.30,.95],[.80,.92,1]],ecoute:[[.55,.90,
   parole:[[.50,.85,1],[.15,.38,1],[.95,.99,1]],briefing:[[.50,.85,1],[.15,.38,1],[.95,.99,1]]};
 const pal=[[.47,.80,1],[.12,.30,.95],[.80,.92,1]];
 function majNiveau(t){let cible={veille:.06,ecoute:.3,reflexion:.4,briefing:.36,parole:.3}[ORBE.mode]??.06;
+  if(ORBE.mode==="ecoute"&&MIC.ana)cible=.18+Math.min(.8,MIC.niveau*9);
   if(ORBE.analyseur&&ORBE.mode==="parole"){ORBE.analyseur.getByteFrequencyData(spec);let s=0;for(let i=2;i<60;i++)s+=spec[i];cible=.12+s/58/255*1.5}
   if(ORBE.forcer)cible=Math.max(cible,ORBE.forcer*(.55+.45*Math.abs(Math.sin(t*.009)*Math.sin(t*.0047))));
   ORBE.niveau+=(cible-ORBE.niveau)*.1;const P=PALETTES[ORBE.mode]||PALETTES.veille;for(let i=0;i<3;i++)for(let j=0;j<3;j++)pal[i][j]+=(P[i][j]-pal[i][j])*.04}
@@ -427,58 +491,87 @@ const GL=(function(){
   centre(){const r=reglage();return{x:innerWidth/2,y:innerHeight*(.5-r.cy/2),r:Math.min(innerWidth,innerHeight)*r.e/2}}};
 })();
 
-/* ── Cerveau neuronal : noyau, filaments et constellations (canvas 2D) ── */
+/* ── Cerveau neuronal vivant : noyau, filaments libres, constellations, éclats (canvas 2D) ── */
 const CERVEAU=(function(){
   const cv=$("#hud"),g=cv.getContext("2d");let W=0,H=0,dpr=1;
   function taille(){dpr=Math.min(devicePixelRatio||1,2);W=cv.width=innerWidth*dpr;H=cv.height=innerHeight*dpr}addEventListener("resize",taille);taille();
   const rnd=(a,b)=>a+Math.random()*(b-a),gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v)};
   const PAL={video:["#38d6ff","#ff3d5e","#5b74ff","#ffa23a","#a35cff","#2dff95","#ff4f8a","#ff6a4a"],
              bleu:["#38d6ff","#4f7bff","#8fc8ff","#2f9bff","#6a8cff","#5fe0ff","#3d5cff","#a9d8ff"]};
-  // régions : clé, angle à l'écran (0 = droite, sens horaire), élévation
   const REG=[["agenda",3.14,.15],["stripe",-2.3,-.25],["langage",-1.57,.3],["mrr",-.35,.2],["priorites",.45,-.3],["memoire",1.05,.25],["meteo",1.65,-.2],["raison",2.35,.3]];
-  const mob=innerWidth<700,NPR=mob?50:105,NF=mob?60:115;
+  const IDX=Object.fromEntries(REG.map((r,i)=>[r[0],i]));
+  const mob=innerWidth<700,NPR=mob?46:92,NF=mob?50:95;
   const noeuds=[],aretes=[],regions=[];
-  REG.forEach(([k,a,el],ri)=>{const d=2.25,cx=Math.cos(a)*d*1.02,cy=Math.sin(a)*d*1.0,cz=el;const deb=noeuds.length;
-    for(let i=0;i<NPR;i++)noeuds.push({x:cx+gauss()*.58,y:cy+gauss()*.5,z:cz+gauss()*.5,r:ri,big:Math.random()<.12});
+  REG.forEach(([k,a,el],ri)=>{const d=2.25,cx=Math.cos(a)*d*1.02,cy=Math.sin(a)*d,cz=el;const deb=noeuds.length;
+    for(let i=0;i<NPR;i++)noeuds.push({x:cx+gauss()*.55,y:cy+gauss()*.48,z:cz+gauss()*.5,r:ri,big:Math.random()<.12,ph:Math.random()*6.28});
     const fin=noeuds.length,ar=[];
     for(let i=deb;i<fin;i++){const dist=[];for(let j=deb;j<fin;j++)if(j!==i){const A=noeuds[i],B=noeuds[j];dist.push([(A.x-B.x)**2+(A.y-B.y)**2+(A.z-B.z)**2,j])}
       dist.sort((p,q)=>p[0]-q[0]);for(let n=0;n<3;n++){const j=dist[n][1];if(i<j||n>0)ar.push([i,j])}}
-    aretes.push(ar);regions.push({k,cx,cy,cz,act:0,flash:0})});
-  const fils=[];for(let i=0;i<NF;i++){let a=rnd(0,6.2832),zz=rnd(-.6,.6);const dx=Math.cos(a),dy=Math.sin(a)*.85;const L=rnd(2.0,4.8),cur=rnd(-1.8,1.8);
-    const px=-dy,py=dx;fils.push({p:[[dx*.85,dy*.85,zz*.5],[dx*1.7+px*cur*.9,dy*1.7+py*cur*.9,zz],[dx*L*.65-px*cur*.6,dy*L*.65-py*cur*.6,zz*1.4],[dx*L+px*cur*.8,dy*L+py*cur*.8,zz*1.6]],
-      v:rnd(.05,.22),ph:Math.random(),w:rnd(.5,1.4),b:Math.random()})}
+    aretes.push(ar);regions.push({k,a,cx,cy,cz,act:.4,flash:0,deb,fin})});
+  // filaments libres : naissent, ondulent, meurent
+  const fils=[];
+  function nouveauFil(vers){const a=vers!=null?REG[vers][1]+rnd(-.35,.35):rnd(0,6.2832),zz=rnd(-.6,.6),dx=Math.cos(a),dy=Math.sin(a)*.9,L=vers!=null?rnd(2.4,3.4):rnd(2.0,5.2);
+    return{a,dx,dy,zz,L,cur:rnd(-1.6,1.6),amp:rnd(.15,.55),fq:rnd(.3,1.1),ph:rnd(0,6.28),v:rnd(.06,.2),w:rnd(.5,1.5),b:Math.random(),
+      ne:performance.now()/1000,vie:vers!=null?rnd(3,5):rnd(7,16),pousse:rnd(.8,2.2),region:vers,chaud:vers!=null}}
+  for(let i=0;i<NF;i++){const f=nouveauFil();f.ne-=rnd(0,f.vie);fils.push(f)}
+  const etincelles=[],ondes=[];
   const etoiles=Array.from({length:mob?90:220},()=>[Math.random(),Math.random(),Math.random()]);
-  let t0=performance.now(),proj=null,S=1,C={x:0,y:0},cache={};
+  let proj=null,S=1,C={x:0,y:0},cache={},dernierT=0;
   function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`}
-  function centre(){const mobile=innerWidth<860;S=Math.min(innerWidth,innerHeight)*(mobile?.13:.105);C={x:innerWidth/2,y:innerHeight*(mobile?.36:.47)};return{x:C.x,y:C.y,r:S}}
-  function dessiner(t){const pal=PAL[COULEURS]||PAL.video,L=ORBE.niveau,mode=ORBE.mode,tt=(t-t0)/1000;centre();
-    const ay=Math.sin(tt*.11)*.45,ax=.12+Math.sin(tt*.07)*.08,cy_=Math.cos(ay),sy=Math.sin(ay),cx_=Math.cos(ax),sx=Math.sin(ax);
+  function centre(){const mobile=innerWidth<860,z=$(".centre"),r=z&&!mobile?z.getBoundingClientRect():null;
+    const larg=r&&r.width>200?r.width:innerWidth;S=Math.min(larg/7.4,innerHeight*.105);if(mobile)S=Math.min(innerWidth/7,innerHeight*.12);
+    C={x:r&&r.width>200?r.left+r.width/2:innerWidth/2,y:innerHeight*(mobile?.36:.46)};return{x:C.x,y:C.y,r:S}}
+  function pointFil(f,u,tt){// point 3D le long du filament u∈[0,1], avec ondulation libre
+    const px=-f.dy,py=f.dx,base=.85+u*(f.L-.85),courbe=Math.sin(u*Math.PI)*f.cur,ond=Math.sin(tt*f.fq+u*4+f.ph)*f.amp*u;
+    return[f.dx*base+px*(courbe+ond),f.dy*base+py*(courbe+ond),f.zz*(.5+u*1.2)]}
+  function eclat(region){const i=IDX[region];if(i==null)return;regions[i].flash=1.4;
+    for(let k=0;k<7;k++)fils.push(nouveauFil(i));ondes.push({t:performance.now()/1000,col:i});
+    for(let k=0;k<14;k++){const n=regions[i].deb+((Math.random()*(regions[i].fin-regions[i].deb))|0);etincelles.push({n,t:performance.now()/1000,d:rnd(.6,1.4)})}}
+  function dessiner(t){const pal=PAL[COULEURS]||PAL.video,L=ORBE.niveau,mode=ORBE.mode,tt=t/1000;centre();
+    const ay=Math.sin(tt*.11)*.42,ax=.12+Math.sin(tt*.07)*.08,cy_=Math.cos(ay),sy=Math.sin(ay),cx_=Math.cos(ax),sx=Math.sin(ax);
     proj=(p)=>{const x1=p[0]*cy_+p[2]*sy,z1=-p[0]*sy+p[2]*cy_,y1=p[1]*cx_-z1*sx,z2=p[1]*sx+z1*cx_,k=4.2/(4.2+z2);return[C.x+x1*S*k,C.y+y1*S*k,z2,k]};
     g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,W,H);g.setTransform(dpr,0,0,dpr,0,0);
     g.globalCompositeOperation="source-over";g.fillStyle="rgba(200,225,255,.5)";
-    etoiles.forEach(([x,y,b])=>{g.globalAlpha=.15+.35*b*(.6+.4*Math.sin(tt*.8+b*20));g.fillRect(x*innerWidth,y*innerHeight,b>.85?1.6:1,b>.85?1.6:1)});g.globalAlpha=1;
-    // activité des régions
-    regions.forEach((r,i)=>{let c=.35+.15*Math.sin(tt*.9+i*1.7);
+    etoiles.forEach(([x,y,b])=>{g.globalAlpha=.12+.35*b*(.6+.4*Math.sin(tt*.8+b*20));g.fillRect(x*innerWidth,y*innerHeight,b>.85?1.6:1,b>.85?1.6:1)});g.globalAlpha=1;
+    // activité des régions (+ étincelles spontanées : des neurones qui s'allument)
+    regions.forEach((r,i)=>{let c=.38+.14*Math.sin(tt*.9+i*1.7);
       if(mode==="reflexion")c=.3+.7*Math.max(0,Math.sin(tt*3-i*.8));
-      if(mode==="parole"||mode==="briefing"){if(Math.random()<L*.06)r.flash=1;c=.45+L*.4}
-      if(mode==="ecoute")c=.5+.2*Math.sin(tt*4+i);r.flash*=.93;r.act+=((c+r.flash*.6)-r.act)*.08});
+      if(mode==="parole"||mode==="briefing"){if(Math.random()<L*.05)r.flash=Math.max(r.flash,.9);c=.45+L*.4}
+      if(mode==="ecoute")c=.5+.25*Math.sin(tt*4+i)+(MIC.niveau||0)*6;
+      r.flash*=.955;r.act+=((c+r.flash*.6)-r.act)*.08;
+      if(Math.random()<.04+r.act*.05){const n=r.deb+((Math.random()*(r.fin-r.deb))|0);etincelles.push({n,t:tt,d:rnd(.5,1.2)})}});
     g.globalCompositeOperation="lighter";
     // constellations
-    regions.forEach((r,ri)=>{const col=pal[ri],ar=aretes[ri],a=r.act;
-      g.lineWidth=.9;g.strokeStyle=hexA(col,.32+.55*a);g.beginPath();
-      ar.forEach(([i,j])=>{const A=proj([noeuds[i].x,noeuds[i].y,noeuds[i].z]),B=proj([noeuds[j].x,noeuds[j].y,noeuds[j].z]);g.moveTo(A[0],A[1]);g.lineTo(B[0],B[1])});g.stroke();
-      g.fillStyle=hexA(col,.75+.25*a);
-      for(let i=0;i<noeuds.length;i++){const n=noeuds[i];if(n.r!==ri)continue;const P=proj([n.x,n.y,n.z]),s=(n.big?3:1.7)*P[3];g.fillRect(P[0]-s/2,P[1]-s/2,s,s)}
-      const P=proj([r.cx,r.cy,r.cz]);cache[r.k]={x:P[0],y:P[1]+S*.55,clair:hexA(col,1),bord:hexA(col,.7),actif:a}});
+    regions.forEach((r,ri)=>{const col=pal[ri],ar=aretes[ri],a=Math.min(1.4,r.act);
+      g.lineWidth=.9;g.strokeStyle=hexA(col,Math.min(.95,.3+.5*a));g.beginPath();
+      ar.forEach(([i,j])=>{const A=noeuds[i],B=noeuds[j],P=proj([A.x,A.y,A.z]),Q=proj([B.x,B.y,B.z]);g.moveTo(P[0],P[1]);g.lineTo(Q[0],Q[1])});g.stroke();
+      g.fillStyle=hexA(col,.8);
+      for(let i=r.deb;i<r.fin;i++){const n=noeuds[i],P=proj([n.x,n.y,n.z]),s=(n.big?3:1.7)*P[3]*(1+.25*Math.sin(tt*2+n.ph));g.fillRect(P[0]-s/2,P[1]-s/2,s,s)}
+      const P=proj([r.cx,r.cy,r.cz]);cache[r.k]={x:P[0],y:P[1]+S*.5,clair:hexA(col,1),bord:hexA(col,.75),actif:a}});
+    // étincelles (neurones qui naissent / s'allument)
+    for(let k=etincelles.length-1;k>=0;k--){const e=etincelles[k],age=(tt-e.t)/e.d;if(age>1||age<0){etincelles.splice(k,1);continue}
+      const n=noeuds[e.n],P=proj([n.x,n.y,n.z]),col=pal[n.r],a=1-age;
+      g.fillStyle=hexA("#ffffff",a*.9);g.beginPath();g.arc(P[0],P[1],1.5+2.5*a,0,6.2832);g.fill();
+      g.strokeStyle=hexA(col,a*.8);g.lineWidth=1;g.beginPath();g.arc(P[0],P[1],3+age*14,0,6.2832);g.stroke()}
+    if(etincelles.length>400)etincelles.splice(0,etincelles.length-400);
     // halo bleu autour du noyau
-    let gr=g.createRadialGradient(C.x,C.y,S*.6,C.x,C.y,S*(2.6+L*1.5));gr.addColorStop(0,`rgba(40,90,255,${.35+L*.3})`);gr.addColorStop(1,"rgba(20,50,200,0)");
+    let gr=g.createRadialGradient(C.x,C.y,S*.6,C.x,C.y,S*(2.6+L*1.5));gr.addColorStop(0,`rgba(40,90,255,${.32+L*.3})`);gr.addColorStop(1,"rgba(20,50,200,0)");
     g.fillStyle=gr;g.beginPath();g.arc(C.x,C.y,S*(2.6+L*1.5),0,6.2832);g.fill();
-    // filaments avec impulsions
-    fils.forEach(f=>{const q=f.p.map(proj),al=.14+.3*f.b+L*.45;g.strokeStyle=`rgba(170,215,255,${Math.min(.85,al)})`;g.lineWidth=f.w*(1+L*.8);
-      g.beginPath();g.moveTo(q[0][0],q[0][1]);g.bezierCurveTo(q[1][0],q[1][1],q[2][0],q[2][1],q[3][0],q[3][1]);g.stroke();
-      const u=(tt*f.v*(1+L*3)+f.ph)%1,v=1-u,x=v*v*v*q[0][0]+3*v*v*u*q[1][0]+3*v*u*u*q[2][0]+u*u*u*q[3][0],y=v*v*v*q[0][1]+3*v*v*u*q[1][1]+3*v*u*u*q[2][1]+u*u*u*q[3][1];
-      g.fillStyle=`rgba(235,248,255,${.5+L*.5})`;g.beginPath();g.arc(x,y,1.6+L*1.6,0,6.2832);g.fill()});
-    // noyau (forme organique bleu profond)
+    // filaments libres
+    for(let k=fils.length-1;k>=0;k--){const f=fils[k],age=tt-f.ne;
+      if(age>f.vie){fils.splice(k,1);if(!f.chaud)fils.push(nouveauFil());continue}
+      const croissance=Math.min(1,age/f.pousse),fondu=Math.min(1,(f.vie-age)/1.5,age*2),N=18,umax=croissance;
+      const col=f.chaud?hexA(pal[f.region],1):null;
+      const al=(f.chaud?.7:.12+.26*f.b)*fondu+L*.4*fondu;
+      g.strokeStyle=f.chaud?hexA(pal[f.region],Math.min(.95,al)):`rgba(175,218,255,${Math.min(.85,al)})`;g.lineWidth=f.w*(1+L*.8)*(f.chaud?1.4:1);
+      g.beginPath();for(let i=0;i<=N;i++){const P=proj(pointFil(f,i/N*umax,tt));i?g.lineTo(P[0],P[1]):g.moveTo(P[0],P[1])}g.stroke();
+      // tête lumineuse quand il pousse, impulsion qui circule ensuite
+      const u=croissance<1?croissance:((tt*f.v*(1+L*3)+f.ph)%1),P=proj(pointFil(f,u,tt));
+      g.fillStyle=f.chaud?hexA("#ffffff",fondu):`rgba(235,248,255,${(.45+L*.5)*fondu})`;g.beginPath();g.arc(P[0],P[1],(croissance<1?2.4:1.5)+L*1.6,0,6.2832);g.fill()}
+    // ondes de choc (événements)
+    for(let k=ondes.length-1;k>=0;k--){const o=ondes[k],age=(tt-o.t)/1.6;if(age>1){ondes.splice(k,1);continue}
+      g.strokeStyle=hexA(pal[o.col],(1-age)*.6);g.lineWidth=2*(1-age)+.5;g.beginPath();g.ellipse(C.x,C.y,S*(1.1+age*3),S*(1+age*2.7),0,0,6.2832);g.stroke()}
+    // noyau
     g.globalCompositeOperation="source-over";g.beginPath();
     for(let i=0;i<=72;i++){const a=i/72*6.2832,r=S*(1+.06*Math.sin(a*3+tt*.7)+.04*Math.sin(a*7-tt*1.1)+.03*Math.sin(a*11+tt*.4)+L*.05*Math.sin(a*5+tt*6));
       const x=C.x+Math.cos(a)*r*1.08,y=C.y+Math.sin(a)*r;i?g.lineTo(x,y):g.moveTo(x,y)}
@@ -492,12 +585,27 @@ const CERVEAU=(function(){
     gr.addColorStop(0,`rgba(255,255,255,${Math.min(.95,.35+L*.9)})`);gr.addColorStop(.35,`rgba(120,215,255,${Math.min(.7,.2+L*.6)})`);gr.addColorStop(1,"rgba(40,120,255,0)");
     g.fillStyle=gr;g.beginPath();g.arc(rx,ry,S*(.9+L*3.2),0,6.2832);g.fill();
     g.globalCompositeOperation="source-over"}
-  return{dessiner,centre,ancre:k=>cache[k]}})();
+  return{dessiner,centre,eclat,ancre:k=>cache[k],couleur:k=>(PAL[COULEURS]||PAL.video)[IDX[k]]||"#7fd3ff"}})();
+
+/* ── Événements en direct : notification, éclat dans le cerveau, annonce vocale ── */
+let dernierEv=null,fileParole=[],rechargeEnAttente=null;
+function toast(e){const box=$("#toasts"),el=document.createElement("div");el.className="toast";el.style.setProperty("--c",CERVEAU.couleur(e.region||"raison"));
+  el.innerHTML=`<i></i><b>${esc(e.titre)}</b><span>${esc(e.texte||"")}</span>`;box.prepend(el);
+  while(box.children.length>4)box.lastChild.remove();setTimeout(()=>{el.classList.add("sort");setTimeout(()=>el.remove(),500)},7500)}
+function montrerEvenement(e){toast(e);CERVEAU.eclat(e.region||"raison");
+  if(["paiement","client","tache","tache_faite","memoire","rappel_prog","briefing","bilan"].includes(e.type)){clearTimeout(rechargeEnAttente);rechargeEnAttente=setTimeout(()=>charger(),1200)}
+  if(e.dire){fileParole.push(e.dire);direSuivant()}}
+async function suivreEvenements(){try{const r=await(await fetch("/api/evenements?depuis="+(dernierEv??0))).json();
+    if(dernierEv===null){dernierEv=r.dernier;return}for(const e of r.evenements){if(e.id>dernierEv){dernierEv=e.id;montrerEvenement(e)}}}catch(e){}}
+async function direSuivant(){if(!fileParole.length||occupe||ORBE.mode!=="veille")return;const t=fileParole.shift();occupe=true;
+  try{const r=await(await fetch("/api/dire",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({texte:t})})).json();await jouer(r.audio,t)}catch(e){}
+  occupe=false;setTimeout(direSuivant,600)}
+setInterval(suivreEvenements,3000);setInterval(direSuivant,2500);
 
 /* ── Fils reliant la sphère aux étiquettes (mode sphère) ── */
 const HUD=(function(){const cv=$("#hud"),g=cv.getContext("2d");let dpr;
   function taille(){dpr=Math.min(devicePixelRatio||1,2)}addEventListener("resize",taille);taille();
-  return{dessiner(t,c){g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cv.width,cv.height);g.setTransform(dpr,0,0,dpr,0,0);
+  return{dessiner(t,c){g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cv.width,cv.height);g.setTransform(dpr,0,0,dpr,0,0);if(innerWidth<860)return;
     NOEUDS.liste().forEach((el,i)=>{if(el._x==null)return;const a=Math.atan2(el._y-c.y,el._x-c.x),x1=c.x+Math.cos(a)*c.r*.9,y1=c.y+Math.sin(a)*c.r*.9;
       const p=.35+.3*Math.sin(t*.002+i*1.3)+ORBE.niveau*.4;const gr=g.createLinearGradient(x1,y1,el._x,el._y);gr.addColorStop(0,`rgba(127,211,255,${p})`);gr.addColorStop(1,"rgba(127,211,255,.08)");
       g.strokeStyle=gr;g.lineWidth=1;g.beginPath();g.moveTo(x1,y1);g.lineTo(el._x,el._y);g.stroke()})}}})();

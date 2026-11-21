@@ -109,3 +109,13 @@ def test_lire_heure():
     assert lire_heure("8h") == (8, 0)
     assert lire_heure("8h30") == (8, 30)
     assert lire_heure("7") == (7, 0)
+
+
+def test_intentions():
+    from jarvis_thibault.cerveau import intentions
+
+    assert intentions("Rappelle-moi à 18h30 d'appeler le comptable.") == [("RAPPEL", "18:30 | appeler le comptable")]
+    assert intentions("Souviens-toi que je préfère le matin")[0] == ("MEMOIRE", "je préfère le matin")
+    assert intentions("Ajoute une tâche urgente : relancer Paul") == [("AJOUT_TACHE", "!!! relancer Paul")]
+    assert intentions("J'ai fini de préparer la démo") == [("TACHE_FAITE", "préparer la démo")]
+    assert intentions("Combien on a encaissé cette semaine ?") == []

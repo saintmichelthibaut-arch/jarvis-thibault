@@ -66,8 +66,11 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
     s = Stripe(cle, transport)
 
     # --- Chiffre d'affaires (paiements réussis, nets des remboursements) ---
-    depuis = min(il_y_a_7j, debut_mois_prec)
+    il_y_a_14j = jour - timedelta(days=13)
+    depuis = min(il_y_a_14j, debut_mois_prec)
     ca = Counter()
+    par_jour: Counter = Counter()
+    derniers = []
     echecs_7j = 0
     for ch in s.lister("/charges", {"created[gte]": int(depuis.timestamp())}):
         if ch.get("currency", "").lower() != devise:
@@ -80,6 +83,9 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
         if ch.get("status") != "succeeded" or not ch.get("paid"):
             continue
         net = _unites(ch["amount"] - ch.get("amount_refunded", 0), devise)
+        if quand >= il_y_a_14j:
+            par_jour[quand.date().isoformat()] += net
+        derniers.append((ch["created"], net))
         if quand >= jour:
             ca["aujourdhui"] += net
         elif quand >= hier:
@@ -125,6 +131,8 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
     essais = sum(1 for _ in s.lister("/subscriptions", {"status": "trialing"}))
 
     r2 = lambda x: round(x, 2)  # noqa: E731
+    jours = [(il_y_a_14j + timedelta(days=i)).date().isoformat() for i in range(14)]
+    derniers.sort(reverse=True)
     return {
         "devise": devise.upper(),
         "ca_aujourdhui": r2(ca["aujourdhui"]),
@@ -140,7 +148,28 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
         "abonnements_actifs": actifs,
         "essais_en_cours": essais,
         "paiements_echoues_7j": echecs_7j,
+        "ca_jours": [{"jour": j, "montant": r2(par_jour[j])} for j in jours],
+        "derniers_paiements": [{"quand": datetime.fromtimestamp(t, tz).isoformat(timespec="minutes"), "montant": r2(m)}
+                               for t, m in derniers[:5]],
     }
+
+
+def nouveautes(cle: str, depuis_ts: int, devise: str = "EUR",
+               transport: Optional[httpx.BaseTransport] = None) -> Dict[str, Any]:
+    """Paiements, échecs et clients apparus après ``depuis_ts`` (pour les alertes en direct)."""
+    s = Stripe(cle, transport)
+    devise = devise.lower()
+    paiements, echecs = [], []
+    for ch in s.lister("/charges", {"created[gt]": int(depuis_ts)}):
+        if ch.get("currency", "").lower() != devise:
+            continue
+        net = _unites(ch["amount"] - ch.get("amount_refunded", 0), devise)
+        if ch.get("status") == "succeeded" and ch.get("paid"):
+            paiements.append({"id": ch["id"], "montant": round(net, 2), "ts": ch["created"]})
+        elif ch.get("status") == "failed":
+            echecs.append({"id": ch["id"], "montant": round(_unites(ch["amount"], devise), 2), "ts": ch["created"]})
+    clients = [{"id": c["id"], "ts": c["created"]} for c in s.lister("/customers", {"created[gt]": int(depuis_ts)})]
+    return {"paiements": paiements, "echecs": echecs, "clients": clients}
 
 
 def stripe(cfg) -> Dict[str, Any]:

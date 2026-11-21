@@ -125,8 +125,7 @@ bleu "6/7  Création de l'app Jarvis"
 cp "$ICI/lancer.sh" "$JH/app/lancer.sh"
 chmod +x "$JH/app/lancer.sh"
 mkdir -p "$HOME/Applications"
-rm -rf "$APP"
-osacompile -o "$APP" -e "do shell script \"'$JH/app/lancer.sh' > /dev/null 2>&1 &\""
+bash "$ICI/creer-app.sh"
 osascript -e "tell application \"System Events\" to delete (every login item whose name is \"Jarvis\")" >/dev/null 2>&1 || true
 osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$APP\", hidden:true}" >/dev/null 2>&1 \
   && ok "Jarvis démarrera tout seul à l'ouverture de session" \

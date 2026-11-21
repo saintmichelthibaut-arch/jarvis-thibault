@@ -13,6 +13,8 @@ def main(argv=None) -> int:
     s = sub.add_parser("serveur", help="lancer le tableau de bord (http://localhost:8765)")
     s.add_argument("--port", type=int)
     s.add_argument("--ouvrir", action="store_true", help="ouvrir le navigateur")
+    sub.add_parser("app", help="ouvrir Jarvis dans sa propre fenêtre (Mac)")
+    sub.add_parser("bilan", help="générer le bilan du soir maintenant")
     b = sub.add_parser("briefing", help="générer le briefing maintenant")
     b.add_argument("--lire", action="store_true", help="le lire à voix haute sur le Mac")
     sub.add_parser("verifier", help="tester chaque source de données")
@@ -26,6 +28,11 @@ def main(argv=None) -> int:
 
         demarrer(port=args.port, demo=demo, ouvrir=args.ouvrir)
         return 0
+
+    if args.cmd == "app":
+        from .app import main as app_main
+
+        return app_main()
 
     from . import cerveau
     from .config import charger
@@ -50,10 +57,10 @@ def main(argv=None) -> int:
             print(f"  ✗  cerveau : {exc}")
         return 0
 
-    if args.cmd == "briefing":
+    if args.cmd in ("briefing", "bilan"):
         from .serveur import Etat, lancer_briefing
 
-        b = lancer_briefing(Etat(cfg), lire_sur_mac=args.lire)
+        b = lancer_briefing(Etat(cfg), lire_sur_mac=getattr(args, "lire", False), type_=args.cmd)
         print(b["texte"])
         if b.get("audio"):
             print(f"\n(audio : {cfg.dossier / 'audio'})")
