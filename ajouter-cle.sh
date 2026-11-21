@@ -8,18 +8,30 @@ PY="$JH/app/.venv/bin/python"
 [[ -f "$SEC" ]] || { printf 'openai_api_key = ""\nstripe_api_key = ""\nbase_url = ""\n' > "$SEC"; }
 chmod 600 "$SEC"
 
-echo "Quelle clé voulez-vous ajouter ?"
-echo "  1) OpenAI (sk-…)"
-echo "  2) Stripe restreinte (rk_live_…)"
-echo "  3) Adresse de la base Fixigo (postgresql://…)"
-read -r -p "Votre choix : " CHOIX
-case "$CHOIX" in
-  1) CLE=openai_api_key ;;
-  2) CLE=stripe_api_key ;;
-  3) CLE=base_url ;;
-  *) echo "Choix inconnu."; exit 1 ;;
-esac
-read -r -s -p "Collez-la puis Entrée (rien ne s'affiche, c'est normal) : " VAL; echo
+if [[ "$(uname)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
+  # Petites fenêtres du Mac : marche même lancé depuis Claude Code (« ! bash … »)
+  CHOIX=$(osascript -e 'choose from list {"OpenAI (sk-…)", "Stripe (rk_live_…)", "Base Fixigo (postgresql://…)"} with title "Jarvis" with prompt "Quelle clé voulez-vous ajouter ?" default items {"OpenAI (sk-…)"}' 2>/dev/null || echo false)
+  case "$CHOIX" in
+    OpenAI*) CLE=openai_api_key ;;
+    Stripe*) CLE=stripe_api_key ;;
+    Base*) CLE=base_url ;;
+    *) echo "Annulé, rien n'a changé."; exit 0 ;;
+  esac
+  VAL=$(osascript -e 'text returned of (display dialog "Collez la clé ici (Cmd + V), puis Enregistrer :" default answer "" with hidden answer with title "Jarvis" buttons {"Annuler", "Enregistrer"} default button "Enregistrer" cancel button "Annuler")' 2>/dev/null || true)
+else
+  echo "Quelle clé voulez-vous ajouter ?"
+  echo "  1) OpenAI (sk-…)"
+  echo "  2) Stripe restreinte (rk_live_…)"
+  echo "  3) Adresse de la base Fixigo (postgresql://…)"
+  read -r -p "Votre choix : " CHOIX
+  case "$CHOIX" in
+    1) CLE=openai_api_key ;;
+    2) CLE=stripe_api_key ;;
+    3) CLE=base_url ;;
+    *) echo "Choix inconnu."; exit 1 ;;
+  esac
+  read -r -s -p "Collez-la puis Entrée (rien ne s'affiche, c'est normal) : " VAL; echo
+fi
 [[ -n "$VAL" ]] || { echo "Rien n'a été collé, rien n'a changé."; exit 1; }
 
 CLE="$CLE" VAL="$VAL" SEC="$SEC" CFG="$JH/config.toml" "$PY" -I - <<'EOF'
