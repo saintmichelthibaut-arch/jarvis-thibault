@@ -28,7 +28,13 @@ def dossier_audio(cfg) -> Path:
 
 
 ELEVEN = "https://api.elevenlabs.io/v1"
-GEORGE = "JBFqnCBsd6RMkjVDRZzb"  # voix « George » d'ElevenLabs (voix de base, offre gratuite)
+GEORGE = "JBFqnCBsd6RMkjVDRZzb"
+import threading as _threading
+import time as _time
+
+_ELEVEN_SEM = _threading.BoundedSemaphore(2)  # le compte gratuit n'accepte que 2 demandes à la fois
+_VOIX_REFUSEES: set = set()
+_ELEVEN_PAUSE = {"jusqua": 0.0}  # voix « George » d'ElevenLabs (voix de base, offre gratuite)
 
 
 def elevenlabs_tts(cle: str, voix_id: str, texte: str, sortie: Path, modele: str = "eleven_flash_v2_5",
@@ -38,13 +44,18 @@ def elevenlabs_tts(cle: str, voix_id: str, texte: str, sortie: Path, modele: str
 
     if not voix_id:
         raise ValueError("Aucune voix ElevenLabs choisie : lancez « jarvis-thibault elevenlabs »")
-    corps = {"text": texte[:4500], "model_id": modele,
+    corps = {"text": texte[:4500], "model_id": modele, "seed": 4242,
              "voice_settings": reglages or {"stability": .5, "similarity_boost": .8, "style": .25, "use_speaker_boost": True}}
     if avec_langue:
         corps["language_code"] = "fr"
-    with httpx.Client(timeout=40, transport=transport) as c:
-        r = c.post(f"{ELEVEN}/text-to-speech/{voix_id}", params={"output_format": "mp3_44100_128"},
-                   headers={"xi-api-key": cle, "accept": "audio/mpeg"}, json=corps)
+    for essai in range(6):
+        with _ELEVEN_SEM, httpx.Client(timeout=40, transport=transport) as c:
+            r = c.post(f"{ELEVEN}/text-to-speech/{voix_id}", params={"output_format": "mp3_44100_128"},
+                       headers={"xi-api-key": cle, "accept": "audio/mpeg"}, json=corps)
+        if r.status_code == 429 and "quota" not in r.text.lower():
+            _time.sleep(.35 * (essai + 1))  # trop de demandes en même temps : on patiente, même voix
+            continue
+        break
     if r.status_code == 401:
         raise PermissionError("Clé ElevenLabs refusée (401) : vérifiez-la avec ajouter-cle.sh")
     if r.status_code in (400, 422) and avec_langue and "language" in r.text.lower():
@@ -91,13 +102,20 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
                 return sortie
             import logging
 
-            reglages = {"stability": .55, "similarity_boost": .8, "style": .3, "use_speaker_boost": True}
+            reglages = {"stability": .7, "similarity_boost": .85, "style": .15, "use_speaker_boost": True}
             modele = v.get("elevenlabs_modele") or "eleven_multilingual_v2"
-            for vid in dict.fromkeys([voix_el, GEORGE]):  # la voix choisie, puis George en secours
-                try:
-                    return elevenlabs_tts(cle, vid, texte, sortie, modele, reglages)
-                except Exception as exc:  # noqa: BLE001
-                    logging.getLogger("jarvis.voix").warning("ElevenLabs (voix %s) refusée : %s", vid, str(exc)[:200])
+            if _time.time() > _ELEVEN_PAUSE["jusqua"]:
+                for vid in [x for x in dict.fromkeys([voix_el, GEORGE]) if x not in _VOIX_REFUSEES]:
+                    try:
+                        return elevenlabs_tts(cle, vid, texte, sortie, modele, reglages)
+                    except Exception as exc:  # noqa: BLE001
+                        m = str(exc).lower()
+                        logging.getLogger("jarvis.voix").warning("ElevenLabs (voix %s) refusée : %s", vid, m[:200])
+                        if "quota" in m or "401" in m:
+                            _ELEVEN_PAUSE["jusqua"] = _time.time() + 6 * 3600  # crédit épuisé : OpenAI pour 6 h, sans mélanger
+                            break
+                        if "402" in m or "403" in m or "free" in m or "not found" in m or "404" in m:
+                            _VOIX_REFUSEES.add(vid)  # voix inutilisable : on n'y revient plus
         fournisseur = "openai"  # secours
 
     if fournisseur == "openai":

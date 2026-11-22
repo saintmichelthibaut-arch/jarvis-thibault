@@ -26,11 +26,11 @@ ETAT_MICRO: dict = {"ok": None}
 class Detecteur:
     """Reçoit des blocs d'échantillons (floats -1..1) et signale les doubles claquements."""
 
-    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .18, ecart_max: float = .9,
+    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .15, ecart_max: float = 1.3,
                  pause_apres: float = 4.0, horloge: Callable[[], float] = time.monotonic):
-        self.k = 6.0 / max(.3, sensibilite)        # combien de fois plus fort que le bruit ambiant
+        self.k = 5.0 / max(.3, sensibilite)        # combien de fois plus fort que le bruit ambiant
         self.min_abs = .02 / max(.3, sensibilite)   # niveau minimum absolu (RMS)
-        self.decroissance = .5                      # le son doit retomber sous 50 % en ~140 ms
+        self.decroissance = .6                      # le son doit retomber sous 50 % en ~140 ms
         self.nb_claps = 0
         self.ecart_min, self.ecart_max, self.pause_apres = ecart_min, ecart_max, pause_apres
         self.horloge = horloge
@@ -53,6 +53,9 @@ class Detecteur:
             if vus >= 9:  # ~140 ms après : un claquement est retombé, une voix non
                 if suite < r0 * self.decroissance:
                     reveil = self._clap(t0)
+                elif time.time() - getattr(self, "_dernier_rejet", 0) > 20:
+                    self._dernier_rejet = time.time()
+                    log.info("Bruit fort ignoré (pas assez bref pour un claquement)")
                 self.candidat = None
             else:
                 self.candidat = (t0, r0, vus, suite)

@@ -113,7 +113,7 @@ tail -f ~/.jarvis/jarvis.log                          # journal en cas de souci
 
 ## En cas de souci
 
-**Un seul réflexe : `bash ~/jarvis-thibault-main/reparer.sh`** — il arrête tout, relance la bonne version, vérifie le micro et vous dit quoi faire. Jarvis est aussi surveillé en permanence : s'il s'arrête, il est relancé tout seul dans la minute.
+**Un seul réflexe : `bash ~/jarvis-thibault-main/reparer.sh`** (et `bash ~/jarvis-thibault-main/diagnostic.sh` pour tout vérifier) — il arrête tout, relance la bonne version, vérifie le micro et vous dit quoi faire. Jarvis est aussi surveillé en permanence : s'il s'arrête, il est relancé tout seul dans la minute.
 
 | Problème | Solution |
 |---|---|

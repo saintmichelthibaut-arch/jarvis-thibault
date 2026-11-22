@@ -17,6 +17,104 @@ BLOC = 480  # 30 ms
 VERROU = threading.Lock()
 niveau_actuel = {"v": 0.0}
 ANNULER = threading.Event()
+ENV_PAS = BLOC / TAUX  # 30 ms
+LECTURE: dict = {"env": None, "t0": 0.0, "actif": False, "fin": 0.0}
+_ENVS: dict = {}
+
+
+def enveloppe(fichier) -> Optional[list]:
+    """Niveau sonore (RMS toutes les 30 ms) d'un fichier audio que Jarvis va prononcer."""
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    fichier = Path(fichier)
+    if str(fichier) in _ENVS:
+        return _ENVS[str(fichier)]
+    if fichier.suffix.lower() == ".wav":
+        wav = fichier
+    else:
+        wav = Path(tempfile.mkstemp(suffix=".wav")[1])
+        if shutil.which("afconvert"):
+            cmd = ["afconvert", "-f", "WAVE", "-d", "LEI16@16000", "-c", "1", str(fichier), str(wav)]
+        elif shutil.which("ffmpeg"):
+            cmd = ["ffmpeg", "-v", "error", "-y", "-i", str(fichier), "-ac", "1", "-ar", "16000", str(wav)]
+        else:
+            return None
+        if subprocess.run(cmd, capture_output=True).returncode != 0:
+            return None
+    try:
+        import array
+
+        with wave.open(str(wav), "rb") as w:
+            taux, n = w.getframerate(), w.getnchannels()
+            a = array.array("h", w.readframes(w.getnframes()))
+        if n > 1:
+            a = a[::n]
+        pas = max(1, int(taux * ENV_PAS))
+        env = [math.sqrt(sum((v / 32768) ** 2 for v in a[i:i + pas]) / pas) for i in range(0, len(a) - pas, pas)]
+    finally:
+        if wav != fichier:
+            wav.unlink(missing_ok=True)
+    _ENVS[str(fichier)] = env
+    if len(_ENVS) > 80:
+        _ENVS.pop(next(iter(_ENVS)))
+    return env
+
+
+def lecture_commence(fichier, position: float = 0.0) -> None:
+    LECTURE.update(env=_ENVS.get(str(fichier)), t0=time.monotonic() - position, actif=True)
+    if LECTURE["env"] is None:
+        def calc():
+            env = enveloppe(fichier)
+            if LECTURE["actif"]:
+                LECTURE["env"] = env
+        threading.Thread(target=calc, daemon=True).start()
+
+
+def lecture_fin() -> None:
+    LECTURE.update(actif=False, fin=time.monotonic())
+
+
+def lecture_etat():
+    """(enveloppe, position en pas de 30 ms) de ce que Jarvis prononce, 0 s'il se tait, None si inconnu."""
+    maintenant = time.monotonic()
+    if not LECTURE["actif"]:
+        return 0 if maintenant - LECTURE.get("fin", 0) > .45 else None
+    if LECTURE["env"] is None:
+        return None
+    return LECTURE["env"], int((maintenant - LECTURE["t0"]) / ENV_PAS)
+
+
+def _correlation(a, b) -> float:
+    n = len(a)
+    if n < 5:
+        return -1.0
+    ma, mb = sum(a) / n, sum(b) / n
+    va = sum((x - ma) ** 2 for x in a)
+    vb = sum((y - mb) ** 2 for y in b)
+    if va <= 0 or vb <= 0:
+        return -1.0
+    return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(va * vb)
+
+
+def apprendre_echo(hist, env):
+    """Décalage (en pas de 30 ms) et gain entre ce que Jarvis dit et ce que le micro entend."""
+    meilleur, decalage = -2.0, 2
+    for d in range(0, 16):
+        paires = [(r, env[p - d]) for p, r in hist if 0 <= p - d < len(env)]
+        c = _correlation([x for x, _ in paires], [y for _, y in paires])
+        if c > meilleur:
+            meilleur, decalage = c, d
+    ratios = []
+    for p, r in hist:
+        seg = env[max(0, p - decalage - 1):max(0, p - decalage + 2)]
+        if seg and max(seg) > .02:
+            ratios.append(r / max(seg))
+    ratios.sort()
+    gain = ratios[min(len(ratios) - 1, int(len(ratios) * .9))] if ratios else .5
+    return decalage, gain
 
 
 def _rms(b) -> float:
@@ -45,6 +143,8 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.0, duree
         trames, parle, silence, debut = [], False, 0.0, time.monotonic()
         calib, bruit, maxi = [], 0.0, 0.0
         echo, fort = deque(maxlen=50), 0  # mode interruption : niveau de la voix de Jarvis captée par le micro
+        hist, echo_appris, fond = [], None, 0.003
+        recents = deque(maxlen=9)  # 5 instants « voix » sur les 270 dernières ms
         with sd.InputStream(samplerate=TAUX, channels=1, blocksize=BLOC, dtype="int16") as flux:
             while True:
                 donnees, _ = flux.read(BLOC)
@@ -60,14 +160,38 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.0, duree
                     niveau_actuel["v"] = 0.0
                     return None
                 if interruption and not parle:
-                    # Jarvis parle : on ne déclenche que si une voix dépasse nettement son propre écho
-                    echo.append(rms)
-                    ref = sorted(echo)[int(len(echo) * .9)] if len(echo) >= 10 else 1.0
-                    seuil_i = max(0.03 / max(.3, sensibilite), ref * 2.3 / max(.3, sensibilite))
+                    # Jarvis parle : on compare le micro, instant par instant, à ce que Jarvis est en train de dire
                     trames = (trames + [bytes(b)])[-12:]
-                    fort = fort + 1 if rms > seuil_i else 0
-                    if fort >= 7:  # ~210 ms de voix forte
-                        parle, bruit = True, ref
+                    etat = lecture_etat()
+                    if etat is not None:
+                        if etat == 0:
+                            ref = 0.0
+                            fond = .95 * fond + .05 * min(rms, fond * 3 + 1e-4)
+                        else:
+                            env, pos = etat
+                            if echo_appris is None:
+                                hist.append((pos, rms))
+                                actifs = sum(1 for p, _ in hist if 0 <= p < len(env) and env[p] > .02)
+                                if actifs < 30:
+                                    fort = 0
+                                    continue  # ≈ 1 s pour apprendre l'écho de la pièce
+                                echo_appris = apprendre_echo(hist, env)
+                            decalage, gain = echo_appris
+                            seg = env[max(0, pos - decalage - 1):max(0, pos - decalage + 2)]
+                            ref = max(seg) if seg else 0.0
+                            if ref < .004:
+                                fond = .95 * fond + .05 * min(rms, fond * 3 + 1e-4)
+                        seuil_i = max(.006 / max(.3, sensibilite), (echo_appris[1] * ref * 1.25 if echo_appris else 0) / max(.3, sensibilite)
+                                      + fond * 2.5 / max(.3, sensibilite))
+                        n_fort = 5
+                    else:
+                        echo.append(rms)
+                        r0 = sorted(echo)[int(len(echo) * .9)] if len(echo) >= 10 else 1.0
+                        seuil_i, n_fort = max(0.03 / max(.3, sensibilite), r0 * 2.3 / max(.3, sensibilite)), 7
+                    recents.append(rms > seuil_i)
+                    fort = sum(recents) if etat is not None else (fort + 1 if rms > seuil_i else 0)
+                    if fort >= n_fort:
+                        parle, bruit = True, max(fond, rms * .25)
                         if sur_debut:
                             sur_debut()
                     elif ecoule > attente_max:

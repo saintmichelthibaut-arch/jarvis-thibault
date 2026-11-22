@@ -348,7 +348,15 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
                     if not m.voix:
                         return None
                     try:
-                        return _url_audio(voix.synthetiser(cfg, p))
+                        f = voix.synthetiser(cfg, p)
+                        if f:
+                            try:
+                                from . import ecoute as _ec
+
+                                _ec.enveloppe(f)
+                            except Exception:  # noqa: BLE001
+                                pass
+                        return _url_audio(f)
                     except Exception as exc:  # noqa: BLE001
                         log.warning("Voix indisponible : %s", exc)
                         return None
@@ -441,6 +449,21 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
                 yield json.dumps(o, ensure_ascii=False) + "\n"
 
         return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+    class Lecture(BaseModel):
+        audio: Optional[str] = None
+        position: float = 0.0
+
+    @app.post("/api/lecture")
+    def api_lecture(lec: Lecture):
+        """L'écran signale ce qu'il joue, pour que Jarvis reconnaisse son propre écho dans le micro."""
+        from . import ecoute
+
+        if lec.audio:
+            ecoute.lecture_commence(voix.dossier_audio(cfg) / Path(lec.audio).name, lec.position)
+        else:
+            ecoute.lecture_fin()
+        return {"ok": True}
 
     @app.post("/api/ecoute_stop")
     def api_ecoute_stop():

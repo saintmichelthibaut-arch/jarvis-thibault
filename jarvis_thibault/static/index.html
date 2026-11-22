@@ -363,7 +363,9 @@ function parlerNavigateur(texte){const st=sousTitres(texte);st.a(0);return new P
   const fin=()=>{if(finCourante===fin)finCourante=null;clearInterval(tm);st.fin();res()};finCourante=fin;u.onend=fin;u.onerror=fin;statut("parole");ORBE.forcer=.55;speechSynthesis.speak(u)}).then(()=>{ORBE.forcer=0;statut("veille")})}
 function jouer(url,texte){if(!url)return parlerNavigateur(texte);preparerAudio();
   const st=sousTitres(texte);st.a(0);
-  return new Promise(res=>{const fin=()=>{if(finCourante===fin)finCourante=null;lecteur.onended=lecteur.onerror=lecteur.ontimeupdate=null;st.fin();statut("veille");res()};finCourante=fin;
+  const signal=(a,pos)=>fetch("/api/lecture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:a,position:pos||0})}).catch(()=>{});
+  return new Promise(res=>{const fin=()=>{if(finCourante===fin)finCourante=null;lecteur.onended=lecteur.onerror=lecteur.ontimeupdate=lecteur.onplaying=null;signal(null);st.fin();statut("veille");res()};finCourante=fin;
+    lecteur.onplaying=()=>signal(url,lecteur.currentTime);
     lecteur.pause();lecteur.src=url;lecteur.onended=fin;lecteur.onerror=()=>{fin();parlerNavigateur(texte)};
     lecteur.ontimeupdate=()=>{if(lecteur.duration)st.a(lecteur.currentTime/lecteur.duration)};statut("parole");
     if(ctxAudio)ctxAudio.resume().catch(()=>{});

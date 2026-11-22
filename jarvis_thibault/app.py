@@ -58,7 +58,12 @@ def main() -> int:
     )
 
     def quitter(*_):
-        # fermeture immédiate : rien à sauvegarder, Jarvis continue de veiller en arrière-plan
+        # fermeture immédiate : on libère le micro, Jarvis continue de veiller en arrière-plan (clap-clap)
+        try:
+            req = urllib.request.Request(url + "api/ecoute_stop", method="POST")
+            urllib.request.urlopen(req, timeout=1).close()
+        except Exception:  # noqa: BLE001
+            pass
         os._exit(0)
 
     fenetre.events.closed += quitter
