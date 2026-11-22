@@ -13,7 +13,7 @@
   --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace; --sans:"Inter","SF Pro Display","Helvetica Neue",Arial,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--fond);color:var(--blanc);font-family:var(--mono);overflow:hidden;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;cursor:default}
+html,body{height:100%;background:#000;color:var(--blanc);font-family:var(--mono);overflow:hidden;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;cursor:default}
 #scene{position:fixed;left:0;top:0;z-index:0;display:block}
 .voile{position:fixed;inset:0;z-index:1;pointer-events:none;
   background:radial-gradient(ellipse 75% 70% at 50% 47%,transparent 55%,rgba(0,0,6,.78) 100%),
@@ -164,13 +164,13 @@ button.b:hover,button.b.on{border-color:var(--trait-fort);color:#fff;background:
 <aside class="modules" id="modules"></aside>
 
 <section class="colonne g">
-  <div class="pan" id="p-semaine"><h2><span>01 · Fixigo · 7 jours</span><span>Stripe</span></h2><div id="semaine"></div></div>
+  <div class="pan" id="p-semaine"><h2><span>01 · Fyxigo · 7 jours</span><span>Stripe</span></h2><div id="semaine"></div></div>
   <div class="pan" id="p-hier"><h2><span>02 · Hier</span><span id="hierDate"></span></h2><div id="hier"></div></div>
   <div class="pan" id="p-moodle"><h2><span>03 · Moodle · à rendre</span><span id="nbDevoirs"></span></h2><div id="moodle"></div></div>
 </section>
 <section class="colonne d">
   <div class="pan" id="p-agenda"><h2><span>04 · Agenda</span><span id="nbEvt"></span></h2><div id="agenda"></div></div>
-  <div class="pan" id="p-priorites"><h2><span>05 · Priorités Fixigo</span><span id="nbTaches"></span></h2><div id="taches"></div></div>
+  <div class="pan" id="p-priorites"><h2><span>05 · Priorités Fyxigo</span><span id="nbTaches"></span></h2><div id="taches"></div></div>
 </section>
 
 <div class="reponse vide" id="reponse"></div><div class="aide" id="aide"></div>
@@ -280,7 +280,7 @@ function rendre(){
   // colonne Neurolink
   const ok=k=>!(k in err)&&d[k]!=null&&!(k==="base"&&!(d.base||[]).length);
   const lignes=[["Agenda",ok("agenda")?"live":"hors ligne",ok("agenda")?"":"ko"],["Stripe",ok("stripe")?"live":"hors ligne",ok("stripe")?"":"ko"],
-    ["Base Fixigo",ok("base")?"live":"hors ligne",ok("base")?"":"ko"],["Moodle",ok("moodle")?"live":(err.moodle?"hors ligne":"à connecter"),ok("moodle")?"":(err.moodle?"ko":"prevu")],
+    ["Base Fyxigo",ok("base")?"live":"hors ligne",ok("base")?"":"ko"],["Moodle",ok("moodle")?"live":(err.moodle?"hors ligne":"à connecter"),ok("moodle")?"":(err.moodle?"ko":"prevu")],
     ["Météo",ok("meteo")?"live":"hors ligne",ok("meteo")?"":"ko"],["Tâches",ok("taches")?"live":"hors ligne",ok("taches")?"":"ko"],
     ["Mémoire",`${(d.memoire||[]).length} souv.`,""],["Rappels",`${(d.rappels||[]).length}`,""],
     ["Cerveau",esc((ETAT.cerveau||"ok").split(" · ")[0]),""],["Voix",ETAT.voix&&ETAT.voix.realiste?"jarvis":"robot",ETAT.voix&&ETAT.voix.realiste?"":"prevu"],
@@ -488,7 +488,7 @@ if(renderer){
   let graine=11;const rnd=()=>{graine|=0;graine=graine+0x6D2B79F5|0;let t=Math.imul(graine^graine>>>15,1|graine);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
   const r2=(a,b)=>a+rnd()*(b-a),gauss=()=>{let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v)};
   const mob=innerWidth<760,R=1.2;
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.setClearColor(0x01020a,1);
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.setClearColor(0x000000,1);
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(34,1,.1,100),monde=new THREE.Group();scene.add(monde);
   const U={uTemps:{value:0},uNiveau:{value:0},uFlash:{value:0},uActivite:{value:new Array(8).fill(.5)},uCouleurs:{value:REG.map(()=>new THREE.Color())}};
   const couleurs=()=>(PAL[COULEURS]||PAL.video).forEach((h,i)=>U.uCouleurs.value[i].set(h));couleurs();
@@ -503,31 +503,30 @@ if(renderer){
   vec4 norm=1.79284291400159-.85373472095314*vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3));p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
   vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));}`;
 
-  /* étoiles */
-  {const n=mob?500:1200,pos=new Float32Array(n*3),gr=new Float32Array(n);
-    for(let i=0;i<n;i++){pos.set([r2(-14,14),r2(-8,8),r2(-12,-3)],i*3);gr[i]=rnd()}
-    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(pos,3));g.setAttribute("aG",new THREE.BufferAttribute(gr,1));
-    scene.add(new THREE.Points(g,new THREE.ShaderMaterial({...additif,uniforms:U,vertexShader:`attribute float aG;uniform float uTemps;varying float vA;
-      void main(){vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;vA=.2+.3*sin(uTemps*.7+aG*40.);gl_PointSize=1.+aG*1.8;}`,
-      fragmentShader:`varying float vA;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(vec3(.55,.68,1.)*vA,1.);}`})))}
+  /* ciel étoilé réaliste */
+  {const n=mob?1400:3200,pos=new Float32Array(n*3),gr=new Float32Array(n*3);
+    for(let i=0;i<n;i++){pos.set([r2(-26,26),r2(-15,15),r2(-30,-6)],i*3);const m=Math.pow(rnd(),6),teinte=rnd();gr.set([m,teinte,rnd()],i*3)}
+    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(pos,3));g.setAttribute("aG",new THREE.BufferAttribute(gr,3));
+    scene.add(new THREE.Points(g,new THREE.ShaderMaterial({...additif,uniforms:U,vertexShader:`attribute vec3 aG;uniform float uTemps;varying float vA;varying vec3 vC;
+      void main(){vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;float sc=.75+.25*sin(uTemps*(1.+aG.z*2.)+aG.z*60.);
+        vC=aG.y<.15?vec3(1.,.82,.65):(aG.y>.8?vec3(.7,.82,1.):vec3(.95,.97,1.));vA=(.18+aG.x*1.6)*sc;gl_PointSize=1.+aG.x*4.5;}`,
+      fragmentShader:`varying float vA;varying vec3 vC;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(vC*vA*pow(1.-d*2.,1.6),1.);}`})))}
 
-  /* noyau : masse bleue organique, bords mouvants (comme la vidéo) */
-  const noyau=new THREE.Mesh(new THREE.IcosahedronGeometry(R,6),new THREE.ShaderMaterial({uniforms:U,transparent:true,
-    vertexShader:NOISE+`uniform float uTemps,uNiveau;varying vec3 vN,vV;varying float vB;
-      void main(){vec3 d=normalize(position);float n=snoise(d*1.6+vec3(0.,uTemps*.12,uTemps*.08))*.16+snoise(d*4.2-uTemps*.2)*.06+snoise(d*9.-uTemps*.4)*.025;
-        n+=uNiveau*.06*snoise(d*6.+uTemps*3.);vB=n;vec3 p=position*(1.+n);vec4 mv=modelViewMatrix*vec4(p,1.);vN=normalize(normalMatrix*d);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`,
-    fragmentShader:`uniform float uNiveau;varying vec3 vN,vV;varying float vB;
-      void main(){float f=pow(1.-abs(dot(vN,vV)),2.4);vec3 c=mix(vec3(.002,.008,.11),vec3(.008,.035,.42),clamp(.5+vB*2.6,0.,1.));c+=vec3(.03,.16,.9)*f*(.45+uNiveau*.4);
-        gl_FragColor=vec4(c,.97);}`}));
-  monde.add(noyau);
-  /* brume bleue autour du noyau (particules) */
-  {const n=mob?1500:3500,pos=new Float32Array(n*3),gr=new Float32Array(n);
-    for(let i=0;i<n;i++){const u=r2(-1,1),t=r2(0,6.2832),q=Math.sqrt(1-u*u),d=R*r2(.95,1.45);pos.set([Math.cos(t)*q*d,u*d,Math.sin(t)*q*d],i*3);gr[i]=rnd()}
-    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(pos,3));g.setAttribute("aG",new THREE.BufferAttribute(gr,1));
-    monde.add(new THREE.Points(g,new THREE.ShaderMaterial({...additif,uniforms:U,vertexShader:`attribute float aG;uniform float uTemps,uNiveau;varying float vA;
-      void main(){vec3 p=position*(1.+.04*sin(uTemps*.6+aG*30.)+uNiveau*.08);vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;
-        vA=.012+.016*aG;gl_PointSize=(6.+aG*12.)*(10./-mv.z);}`,
-      fragmentShader:`varying float vA;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(vec3(.15,.35,1.)*vA*(1.-d*2.),1.);}`})))}
+  /* noyau : sphère sombre et translucide (verre fumé), contour net, balayage holographique */
+  const noyau=new THREE.Mesh(new THREE.SphereGeometry(R,96,72),new THREE.ShaderMaterial({uniforms:U,transparent:true,depthWrite:false,
+    vertexShader:`varying vec3 vN,vV,vP;void main(){vN=normalize(normalMatrix*normal);vec4 mv=modelViewMatrix*vec4(position,1.);vV=normalize(-mv.xyz);vP=position;gl_Position=projectionMatrix*mv;}`,
+    fragmentShader:NOISE+`uniform float uTemps,uNiveau,uFlash;varying vec3 vN,vV,vP;
+      void main(){float ndv=abs(dot(vN,vV)),f=pow(1.-ndv,3.);
+        float brume=snoise(vP*1.8+vec3(0.,uTemps*.15,uTemps*.1))*.5+.5;
+        float lignes=.5+.5*sin(gl_FragCoord.y*1.35);
+        vec3 c=vec3(.0025,.004,.014)*(.5+.5*brume)+vec3(.012,.022,.07)*f+vec3(.004,.008,.022)*lignes*.6;
+        c+=vec3(.02,.05,.14)*(uNiveau*.4+uFlash*.25)*(1.-ndv*.4);
+        gl_FragColor=vec4(c,.72+f*.2);}`}));
+  noyau.renderOrder=2;monde.add(noyau);
+  // fin liseré
+  monde.add(new THREE.Mesh(new THREE.SphereGeometry(R*1.004,96,72),new THREE.ShaderMaterial({...additif,uniforms:U,
+    vertexShader:`varying vec3 vN,vV;void main(){vN=normalize(normalMatrix*normal);vec4 mv=modelViewMatrix*vec4(position,1.);vV=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`,
+    fragmentShader:`uniform float uNiveau;varying vec3 vN,vV;void main(){float f=pow(1.-abs(dot(vN,vV)),9.);gl_FragColor=vec4(vec3(.35,.5,1.)*f*(.45+uNiveau*.5),1.);}`})));
 
   /* anneau de constellations néon (8 régions, très denses) */
   const centres=[];
@@ -566,11 +565,25 @@ if(renderer){
           vec3 p=d*(${R.toFixed(2)}*1.02+tm*L)+p1*(sin(tm*3.1)*(s-.5)*1.6+sin(uTemps*fq+tm*4.5+s*20.)*amp*tm)+p2*(cos(uTemps*fq*.8+tm*3.5+s*13.)*amp*.5*tm);
           gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
           float c=fract(uTemps*(.22+s*.35)*(1.+uNiveau*1.5)+s*5.),pulse=exp(-pow((tm-c)*11.,2.));vT=t;
-          vB=((.05+.2*s)*(1.-t*.7)+pulse*(.6+uNiveau*.4)+uFlash*.2*(1.-t))*fond*step(t,pousse+.001);}`,
+          vB=((.07+.24*s)*(1.-t*.55)+pulse*(.5+uNiveau*.4)+uFlash*.2*(1.-t))*fond*step(t,pousse+.001);}`,
       fragmentShader:`varying float vB;varying float vT;void main(){gl_FragColor=vec4(mix(vec3(.85,.95,1.),vec3(.45,.7,1.),vT)*vB,1.);}`})))}
 
+  /* points lumineux au bout des filaments */
+  {const nfil=mob?110:240;graine=91;const pos=[],a1=[],a2=[];
+    for(let f=0;f<nfil;f++){const a=r2(0,6.2832),d=new THREE.Vector3(Math.cos(a)*1.15,Math.sin(a)*.9,r2(-.35,.35)).normalize(),p1=new THREE.Vector3(-d.y,d.x,0).normalize();
+      pos.push(d.x,d.y,d.z);a1.push(p1.x,p1.y,p1.z);a2.push(rnd(),rnd()<.35?r2(4,7):r2(1.6,3.8))}
+    const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));g.setAttribute("aPerp",new THREE.Float32BufferAttribute(a1,3));g.setAttribute("aInfo",new THREE.Float32BufferAttribute(a2,2));
+    monde.add(new THREE.Points(g,new THREE.ShaderMaterial({...additif,uniforms:U,
+      vertexShader:`attribute vec3 aPerp;attribute vec2 aInfo;uniform float uTemps,uNiveau;varying float vB;
+        void main(){float s=aInfo.x,L=aInfo.y;vec3 d=normalize(position),p1=aPerp,p2=normalize(cross(d,p1));
+          float vie=fract(uTemps*(.045+s*.05)+s*9.),pousse=smoothstep(0.,.3,vie),fond=1.-smoothstep(.72,1.,vie),tm=pousse;
+          float amp=(.18+s*.5)*(1.+uNiveau*1.4),fq=1.+s*2.2;
+          vec3 p=d*(${R.toFixed(2)}*1.02+tm*L)+p1*(sin(tm*3.1)*(s-.5)*1.6+sin(uTemps*fq+tm*4.5+s*20.)*amp*tm)+p2*(cos(uTemps*fq*.8+tm*3.5+s*13.)*amp*.5*tm);
+          vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;vB=fond*(.55+.45*sin(uTemps*3.+s*50.));gl_PointSize=(2.5+s*4.)*(10./-mv.z);}`,
+      fragmentShader:`varying float vB;void main(){float d=length(gl_PointCoord-.5);if(d>.5)discard;gl_FragColor=vec4(vec3(.92,.97,1.)*vB*pow(1.-d*2.,1.5)*1.6,1.);}`})))}
+
   /* éclairs sur le bord du noyau */
-  const NARC=7,PTS=30,arcPos=new Float32Array(NARC*PTS*2*3),arcGeo=new THREE.BufferGeometry();arcGeo.setAttribute("position",new THREE.BufferAttribute(arcPos,3));
+  const NARC=10,PTS=34,arcPos=new Float32Array(NARC*PTS*2*3),arcGeo=new THREE.BufferGeometry();arcGeo.setAttribute("position",new THREE.BufferAttribute(arcPos,3));
   const arcMat=new THREE.LineBasicMaterial({color:0xffffff,...additif});scene.add(new THREE.LineSegments(arcGeo,arcMat));
   const eclatSprite=(()=>{const c=document.createElement("canvas");c.width=c.height=256;const g=c.getContext("2d"),gr=g.createRadialGradient(128,128,0,128,128,128);
     gr.addColorStop(0,"rgba(255,255,255,1)");gr.addColorStop(.2,"rgba(190,235,255,.7)");gr.addColorStop(.55,"rgba(70,160,255,.18)");gr.addColorStop(1,"rgba(30,90,255,0)");g.fillStyle=gr;g.fillRect(0,0,256,256);
@@ -587,14 +600,18 @@ if(renderer){
   const act=new Array(8).fill(.5),fl=new Array(8).fill(0),tmp=new THREE.Vector3(),droite=new THREE.Vector3(),haut=new THREE.Vector3();let dernier=0,derniereCouleur=COULEURS;
   const hexA=(h,a)=>{const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`};
   function eclairs(t,L){camera.getWorldDirection(tmp);droite.crossVectors(tmp,camera.up).normalize();haut.crossVectors(droite,tmp).normalize();
-    const ra=Math.PI*.95+Math.sin(t*.25)*.9+Math.sin(t*.06)*.6,span=.55+L*.5+flash*.4;let o=0;
-    for(let a=0;a<NARC;a++){let prev=null;const a0=ra-span*r2(.6,1),a1=ra+span*r2(.6,1),off=a>=4?r2(.05,.35)*R:0;
-      for(let k=0;k<PTS;k++){const an=a0+(a1-a0)*k/(PTS-1),rr=R*(1.04+(rnd()-.5)*.09*(1+L+flash))+off*Math.sin(k/(PTS-1)*3.1416);
-        const x=(Math.cos(an)*droite.x+Math.sin(an)*haut.x)*rr,y=(Math.cos(an)*droite.y+Math.sin(an)*haut.y)*rr,z=(Math.cos(an)*droite.z+Math.sin(an)*haut.z)*rr;
-        if(prev){arcPos.set(prev,o);arcPos.set([x,y,z],o+3);o+=6}prev=[x,y,z]}}
-    arcGeo.attributes.position.needsUpdate=true;const f=.5+L*.5+flash*.7;arcMat.color.setRGB(.7*f,.9*f,f);
-    eclatSprite.position.set((Math.cos(ra)*droite.x+Math.sin(ra)*haut.x)*R*1.05,(Math.cos(ra)*droite.y+Math.sin(ra)*haut.y)*R*1.05,(Math.cos(ra)*droite.z+Math.sin(ra)*haut.z)*R*1.05);
-    eclatSprite.scale.setScalar(R*(.9+L*1.1+flash*1.2));eclatSprite.material.opacity=.4+L*.25+flash*.3}
+    const avant=tmp.clone().multiplyScalar(-R*.95);let o=0;const x0=Math.sin(t*.4)*.18*R+Math.sin(t*1.7)*.04*R,amp=(.07+L*.07+flash*.06)*R;
+    const P=(x,y)=>[droite.x*x+haut.x*y+avant.x,droite.y*x+haut.y*y+avant.y,droite.z*x+haut.z*y+avant.z];
+    const trace=(pts)=>{for(let k=1;k<pts.length&&o<arcPos.length-6;k++){arcPos.set(P(...pts[k-1]),o);arcPos.set(P(...pts[k]),o+3);o+=6}};
+    // tronc principal : de haut en bas, à travers la sphère
+    const tronc=[];let x=x0;for(let k=0;k<PTS;k++){const y=R*(1.02-2.04*k/(PTS-1));x+=(rnd()-.5)*amp;x+=(x0-x)*.18;tronc.push([x,y])}
+    for(let doublure=0;doublure<3;doublure++)trace(tronc.map(([a,b])=>[a+(rnd()-.5)*.012*R,b]));
+    // ramifications
+    for(let b=0;b<3;b++){const i=4+Math.floor(rnd()*(PTS-10)),[bx,by]=tronc[i],dir=rnd()<.5?-1:1,n=6+Math.floor(rnd()*7),br=[[bx,by]];let cx=bx,cy=by;
+      for(let k=0;k<n;k++){cx+=dir*R*r2(.03,.07);cy-=R*r2(.02,.06);cx+=(rnd()-.5)*amp*.6;br.push([cx,cy])}if(rnd()<.6+L)trace(br)}
+    for(;o<arcPos.length;o++)arcPos[o]=0;
+    arcGeo.attributes.position.needsUpdate=true;const f=.85+L*.6+flash*.8+(Math.random()<.08?.6:0);arcMat.color.setRGB(.78*f,.9*f,f);
+    eclatSprite.position.set(...P(x0,0));eclatSprite.scale.setScalar(R*(1.1+L*.9+flash*.8));eclatSprite.material.opacity=.22+L*.2+flash*.25}
   Object.assign(CERVEAU,{
     eclat(region){const i=IDX[region]??IDX.raison;fl[i]=1.5;flash=Math.max(flash,1);
       const m=new THREE.Mesh(new THREE.RingGeometry(R*1.02,R*1.07,96),new THREE.MeshBasicMaterial({color:new THREE.Color((PAL[COULEURS]||PAL.video)[i]),...additif,side:THREE.DoubleSide}));scene.add(m);ondes.push({m,t:dernier})},

@@ -119,7 +119,7 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
     if s:
         dv = s["devise"]
         o = d["objectifs_chiffres"]
-        L.append("FIXIGO — STRIPE :")
+        L.append("FYXIGO — STRIPE :")
         L.append(f"  - Hier : {_eur(s['ca_hier'], dv)} encaissés, {s['nouveaux_clients_hier']} nouveaux clients.")
         L.append(f"  - 7 derniers jours : {_eur(s['ca_7j'], dv)}, {s['nouveaux_clients_7j']} nouveaux clients.")
         comp = ""
@@ -138,7 +138,7 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
 
     b = d.get("base")
     if b:
-        L.append("FIXIGO — APPLI :")
+        L.append("FYXIGO — APPLI :")
         for i in b:
             if i.get("valeur") is not None:
                 L.append(f"  - {i['nom']} : {i['valeur']}")
@@ -146,10 +146,10 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
     t = d.get("taches")
     if t:
         if t["objectifs"]:
-            L.append("OBJECTIFS FIXIGO : " + " ; ".join(t["objectifs"]))
+            L.append("OBJECTIFS FYXIGO : " + " ; ".join(t["objectifs"]))
         ouvertes = [x for x in t["taches"] if not x["fait"]]
         if ouvertes:
-            L.append(f"TÂCHES FIXIGO OUVERTES ({len(ouvertes)}), par ordre d'urgence :")
+            L.append(f"TÂCHES FYXIGO OUVERTES ({len(ouvertes)}), par ordre d'urgence :")
             for x in ouvertes[:8]:
                 tags = []
                 if x["en_retard"]:
@@ -179,7 +179,7 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
                 f"{c['nom']}" + (f" ({c['progression']:.0f} %)" if isinstance(c.get("progression"), (int, float)) else "")
                 for c in mo["cours"][:8]))
     if s and s.get("ca_jours"):
-        L.append("FIXIGO — ENCAISSEMENTS PAR JOUR (14 j) : " + ", ".join(
+        L.append("FYXIGO — ENCAISSEMENTS PAR JOUR (14 j) : " + ", ".join(
             f"{x['jour'][8:10]}/{x['jour'][5:7]} {x['montant']:.0f} €" for x in s["ca_jours"]))
     if d.get("rappels"):
         L.append("RAPPELS PROGRAMMÉS : " + " ; ".join(f"{r['quand'][11:16]} {r['texte']}" for r in d["rappels"]))
@@ -206,7 +206,7 @@ def persona(cfg) -> str:
 QUI TU ES
 - Un majordome numérique loyal, brillant et calme, façon Jarvis d'Iron Man : efficace, élégant, toujours un coup d'avance.
 - Tu as l'humour d'un majordome britannique d'IA de film : pince-sans-rire, ironie fine, petites piques affectueuses (« Je me permets de noter que… », « Fascinant, Monsieur. », « Je prépare déjà les excuses pour votre retard. »). Une touche drôle par réponse, dite avec un sérieux parfait, jamais lourde.
-- Tu es aussi le bras droit de {moi['prenom']} pour FIXIGO, l'entreprise qu'il développe : tu suis les chiffres, tu rappelles les priorités, tu le pousses à avancer et tu oses lui dire franchement quand quelque chose cloche.
+- Tu es aussi le bras droit de {moi['prenom']} pour FYXIGO, l'entreprise qu'il développe : tu suis les chiffres, tu rappelles les priorités, tu le pousses à avancer et tu oses lui dire franchement quand quelque chose cloche.
 
 COMMENT TU T'ADRESSES À LUI
 - Tu le vouvoies et tu l'appelles « {principal} » la plupart du temps{', et parfois ' + autres + ' quand le ton est plus complice' if autres else ''}.
@@ -224,8 +224,8 @@ def _consigne_briefing(cfg) -> str:
 1. Salutation avec l'appellation et la date du jour, une petite touche d'humour (liée à la météo ou à la journée).
 2. La météo en deux phrases, avec un conseil pratique (parapluie, manteau...).
 3. L'agenda du jour : les rendez-vous dans l'ordre avec l'heure ; signale les journées chargées ou les trous utiles. Mentionne demain s'il y a quelque chose d'important.
-4. Fixigo, les chiffres : hier, les 7 derniers jours, le mois et le MRR par rapport à l'objectif. Dis clairement si c'est bon ou s'il faut accélérer.
-5. Fixigo, l'action : les 3 priorités du jour, tirées des tâches (en retard et échéances d'abord) et de ce que révèlent les chiffres. Sois concret.
+4. Fyxigo, les chiffres : hier, les 7 derniers jours, le mois et le MRR par rapport à l'objectif. Dis clairement si c'est bon ou s'il faut accélérer.
+5. Fyxigo, l'action : les 3 priorités du jour, tirées des tâches (en retard et échéances d'abord) et de ce que révèlent les chiffres. Sois concret.
 6. Si des devoirs Moodle sont fournis : ceux à rendre dans les prochains jours, avec la date, le plus urgent d'abord.
 7. Une phrase de conclusion motivante et légèrement drôle.
 Uniquement les données fournies. Pas de markdown, pas de listes : du texte parlé fluide en paragraphes."""
@@ -351,7 +351,7 @@ def repondre(cfg, message: str, historique: List[Dict[str, str]],
 
 
 ACTIONS = """TES POUVOIRS — quand on te le demande, ajoute la ou les balises correspondantes AU DÉBUT de ta réponse, puis confirme naturellement :
-- [AJOUT_TACHE: texte]  → ajoute une tâche Fixigo (mets « !!! » devant le texte si c'est urgent, « @AAAA-MM-JJ » à la fin pour une échéance)
+- [AJOUT_TACHE: texte]  → ajoute une tâche Fyxigo (mets « !!! » devant le texte si c'est urgent, « @AAAA-MM-JJ » à la fin pour une échéance)
 - [TACHE_FAITE: mots-clés]  → coche une tâche terminée (« j'ai fini / c'est fait … »)
 - [MEMOIRE: fait à retenir]  → retient une information durable (« souviens-toi que… », préférences, personnes, objectifs)
 - [OUBLIE: mots-clés]  → efface un souvenir
@@ -416,7 +416,7 @@ def intentions(message: str, fuseau: str = "Europe/Paris") -> List[tuple[str, st
 def _consigne_bilan() -> str:
     return """Rédige le BILAN DU SOIR, à lire à voix haute (45 secondes, 100 à 160 mots) :
 1. Un mot pour clôturer la journée, avec humour léger.
-2. Fixigo aujourd'hui : ce qui a été encaissé et les nouveaux clients du jour s'ils sont fournis, la tendance des 14 derniers jours.
+2. Fyxigo aujourd'hui : ce qui a été encaissé et les nouveaux clients du jour s'ils sont fournis, la tendance des 14 derniers jours.
 3. Les tâches : ce qui reste ouvert et ce qu'il faudra attaquer en premier demain.
 4. Demain dans l'agenda, s'il y a quelque chose.
 5. Une phrase pour finir la soirée (repos, sport, famille…).

@@ -51,7 +51,7 @@ objectif_clients_mois = 40                 # objectif de nouveaux clients par mo
 fichier_taches = "fixigo.md"               # vos objectifs et tâches (~/.jarvis/fixigo.md)
 
 [fixigo.base]
-# Chiffres tirés de la base de données de l'appli Fixigo.
+# Chiffres tirés de la base de données de l'appli Fyxigo.
 # L'adresse de connexion se met dans secrets.toml (base_url).
 # Chaque indicateur = une requête SQL qui renvoie UN nombre.
 # panneau = "hier" (panneau de droite) ou "semaine" (panneau de gauche)

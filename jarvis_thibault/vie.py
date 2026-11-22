@@ -224,8 +224,8 @@ class VeilleStripe:
                 continue
             self.vus.add(c["id"])
             nouveau = True
-            self.ev.publier("client", "Nouveau client Fixigo", "bienvenue à bord", "mrr",
-                            dire=f"{appel}, un nouveau client vient de rejoindre Fixigo.")
+            self.ev.publier("client", "Nouveau client Fyxigo", "bienvenue à bord", "mrr",
+                            dire=f"{appel}, un nouveau client vient de rejoindre Fyxigo.")
         if nouveau:
             threading.Thread(target=self.etat.rafraichir, kwargs={"force": True}, daemon=True).start()
 

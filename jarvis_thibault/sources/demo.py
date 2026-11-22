@@ -14,7 +14,7 @@ _TACHES_DEMO = """# Objectifs
 
 # À faire
 - [ ] !!! Relancer les 3 artisans en attente de validation @{hier}
-- [ ] !! Préparer la démo pour le rendez-vous avec le plombier de Lyon @{auj}
+- [ ] !! Préparer la démo pour le rendez-vous avec le serrurier du 11e @{auj}
 - [ ] !! Lancer la campagne d'e-mails « hiver » @{demain}
 - [ ] ! Répondre aux 2 avis clients négatifs
 - [ ] Mettre à jour la page tarifs
@@ -35,10 +35,10 @@ def FICHIER_DEMO() -> Path:
 def agenda_demo(jour: date) -> List[Dict[str, Any]]:
     a, d = jour.isoformat(), (jour + timedelta(days=1)).isoformat()
     return [
-        {"titre": "Point hebdo équipe Fixigo", "jour": a, "debut": "09:30", "fin": "10:00",
+        {"titre": "Point hebdo équipe Fyxigo", "jour": a, "debut": "09:30", "fin": "10:00",
          "journee": False, "lieu": "Teams", "calendrier": "Outlook"},
-        {"titre": "Démo Fixigo — plomberie Martin", "jour": a, "debut": "11:00", "fin": "11:45",
-         "journee": False, "lieu": "Lyon 3e", "calendrier": "Outlook"},
+        {"titre": "Démo Fyxigo — serrurerie Martin", "jour": a, "debut": "11:00", "fin": "11:45",
+         "journee": False, "lieu": "Paris 11e", "calendrier": "Outlook"},
         {"titre": "Déjeuner avec Julien", "jour": a, "debut": "12:30", "fin": "14:00",
          "journee": False, "lieu": "", "calendrier": "iCloud"},
         {"titre": "Appel investisseur", "jour": a, "debut": "16:00", "fin": "16:30",
@@ -46,12 +46,12 @@ def agenda_demo(jour: date) -> List[Dict[str, Any]]:
         {"titre": "Salle de sport", "jour": a, "debut": "19:00", "fin": "20:00",
          "journee": False, "lieu": "", "calendrier": "iCloud"},
         {"titre": "Salon de l'artisanat", "jour": d, "debut": None, "fin": None,
-         "journee": True, "lieu": "Eurexpo", "calendrier": "Outlook"},
+         "journee": True, "lieu": "Paris Expo", "calendrier": "Outlook"},
     ]
 
 
 def meteo_demo() -> Dict[str, Any]:
-    return {"ville": "Lyon", "maintenant": 6, "ressenti": 3, "min": 4, "max": 11,
+    return {"ville": "Paris", "maintenant": 6, "ressenti": 3, "min": 4, "max": 11,
             "pluie_proba": 60, "vent_kmh": 18, "description": "averses",
             "description_actuelle": "couvert", "icone": "🌦", "lever": "07:52",
             "coucher": "17:01"}
