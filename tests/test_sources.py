@@ -154,3 +154,43 @@ def test_moodle(tmp_path):
     import tomllib
     c = tomllib.loads(conf.read_text(encoding="utf-8"))
     assert c["moodle"] == {"url": "https://m.ex", "actif": True} and c["serveur"]["port"] == 8765
+
+
+def _signal(evenements, duree=3.0, taux=16000):
+    """Bruit de fond + claquements (t) ou paroles (t, 'voix')."""
+    import math
+    import random
+
+    random.seed(1)
+    n = int(duree * taux)
+    x = [random.gauss(0, .004) for _ in range(n)]
+    for e in evenements:
+        t0 = int(e[0] * taux)
+        if len(e) == 1:  # claquement : salve de bruit qui retombe en ~15 ms
+            for i in range(int(.08 * taux)):
+                if t0 + i < n:
+                    x[t0 + i] += random.gauss(0, .5) * math.exp(-i / (.012 * taux))
+        else:  # voix : son tenu 400 ms
+            for i in range(int(.4 * taux)):
+                if t0 + i < n:
+                    x[t0 + i] += .25 * math.sin(2 * math.pi * 180 * i / taux) * (1 + .3 * math.sin(i / 300))
+    return x
+
+
+def _compter(x, taux=16000, bloc=256):
+    from jarvis_thibault.claquement import Detecteur
+
+    t = [0.0]
+    d = Detecteur(horloge=lambda: t[0])
+    n = 0
+    for i in range(0, len(x) - bloc, bloc):
+        t[0] = i / taux
+        n += d.bloc(x[i:i + bloc])
+    return n
+
+
+def test_double_claquement():
+    assert _compter(_signal([(.5,), (.9,)])) == 1          # clap-clap → réveil
+    assert _compter(_signal([(.5,)])) == 0                 # un seul claquement → rien
+    assert _compter(_signal([(.5,), (2.2,)])) == 0         # trop espacés → rien
+    assert _compter(_signal([(.5, "voix"), (1.0, "voix")])) == 0  # quelqu'un parle → rien

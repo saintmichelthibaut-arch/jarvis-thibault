@@ -46,16 +46,40 @@ def main() -> int:
         webbrowser.open(url)
         return 0
     ecran = cfg["ecran"]
-    webview.create_window(
+    drapeau = cfg.dossier / ".reveil"
+    reveil = drapeau.exists() and time.time() - drapeau.stat().st_mtime < 60
+    drapeau.unlink(missing_ok=True)
+    etat = {"plein": bool(ecran.get("plein_ecran", False)) or reveil}
+    fenetre = webview.create_window(
         "J.A.R.V.I.S.", url + "?app=1",
         width=1600, height=1000, min_size=(900, 620),
-        background_color="#030a2c", text_select=False,
-        fullscreen=bool(ecran.get("plein_ecran", False)),
+        background_color="#01030b", text_select=False,
+        fullscreen=etat["plein"],
     )
+
+    def surveiller_reveil():
+        """Double claquement pendant que l'app est ouverte : fenêtre devant, en plein écran."""
+        while True:
+            time.sleep(.5)
+            if not drapeau.exists():
+                continue
+            drapeau.unlink(missing_ok=True)
+            try:
+                fenetre.restore()
+                fenetre.show()
+                fenetre.on_top = True
+                if not etat["plein"]:
+                    fenetre.toggle_fullscreen()
+                    etat["plein"] = True
+                time.sleep(.6)
+                fenetre.on_top = False
+            except Exception:  # noqa: BLE001
+                pass
+
     stockage = cfg.dossier / "fenetre"
     stockage.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("PYWEBVIEW_LOG", "warning")
-    webview.start(private_mode=False, storage_path=str(stockage))
+    webview.start(surveiller_reveil, private_mode=False, storage_path=str(stockage))
     return 0
 
 

@@ -87,5 +87,9 @@ actif = true             # bilan de la journée chaque soir
 heure = "19:30"
 lecture_auto = false     # true : il le lit à voix haute tout seul
 
+[claquement]
+actif = true             # clap-clap : ouvre Jarvis en plein écran, même fenêtre fermée
+sensibilite = 1.0        # plus haut = plus sensible (ex. 1.5) · plus bas = moins (ex. 0.7)
+
 [serveur]
 port = 8765

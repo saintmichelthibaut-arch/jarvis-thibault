@@ -223,6 +223,12 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
 
     if planifier:
         threading.Thread(target=_planificateur, args=(etat,), daemon=True).start()
+        import platform
+
+        if cfg["claquement"].get("actif") and platform.system() == "Darwin" and not cfg.demo:
+            from .claquement import ecouter
+
+            threading.Thread(target=ecouter, args=(cfg, etat.ev), daemon=True).start()
     threading.Thread(target=etat.rafraichir, daemon=True).start()
 
     @app.get("/", response_class=HTMLResponse)

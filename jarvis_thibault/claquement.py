@@ -1,0 +1,119 @@
+"""Réveil par double claquement de mains : ouvre Jarvis en plein écran.
+
+Écoute le micro en arrière-plan (même quand la fenêtre est fermée). Un claquement
+est un son très bref et très fort par rapport au bruit ambiant, qui retombe aussitôt
+(la voix ou la musique, elles, durent). Deux claquements espacés de 0,2 à 0,9 s
+déclenchent le réveil.
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+import subprocess
+import threading
+import time
+from pathlib import Path
+from typing import Callable, List, Optional
+
+log = logging.getLogger("jarvis.claquement")
+
+TAUX = 16000
+BLOC = 256  # 16 ms
+
+
+class Detecteur:
+    """Reçoit des blocs d'échantillons (floats -1..1) et signale les doubles claquements."""
+
+    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .18, ecart_max: float = .9,
+                 pause_apres: float = 4.0, horloge: Callable[[], float] = time.monotonic):
+        self.k = 9.0 / max(.3, sensibilite)        # combien de fois plus fort que le bruit ambiant
+        self.min_abs = .05 / max(.3, sensibilite)   # niveau minimum absolu (RMS)
+        self.ecart_min, self.ecart_max, self.pause_apres = ecart_min, ecart_max, pause_apres
+        self.horloge = horloge
+        self.bruit = .004
+        self.candidat: Optional[tuple] = None  # (t, rms, blocs écoulés, rms max des blocs suivants)
+        self.claps: List[float] = []
+        self.dernier_reveil = -1e9
+        self.dernier_clap = -1e9
+
+    def bloc(self, ech) -> bool:
+        t = self.horloge()
+        n = len(ech) or 1
+        rms = math.sqrt(sum(x * x for x in ech) / n)
+        crete = max((abs(x) for x in ech), default=0.0)
+        reveil = False
+        if self.candidat:
+            t0, r0, vus, suite = self.candidat
+            suite = max(suite, rms if vus >= 2 else 0.0)  # on laisse 2 blocs pour la queue du claquement
+            vus += 1
+            if vus >= 9:  # ~140 ms après : un claquement est retombé, une voix non
+                if suite < r0 * .3:
+                    reveil = self._clap(t0)
+                self.candidat = None
+            else:
+                self.candidat = (t0, r0, vus, suite)
+        elif (rms > max(self.min_abs, self.bruit * self.k) and crete > 2.2 * rms
+              and t - self.dernier_clap > .12):
+            self.candidat = (t, rms, 0, 0.0)
+        else:
+            # bruit ambiant : moyenne lente, seulement hors pics
+            self.bruit = .995 * self.bruit + .005 * min(rms, self.bruit * 3 + 1e-4)
+        return reveil
+
+    def _clap(self, t: float) -> bool:
+        self.dernier_clap = t
+        if t - self.dernier_reveil < self.pause_apres:
+            return False
+        self.claps = [c for c in self.claps if t - c <= self.ecart_max] + [t]
+        if len(self.claps) >= 2 and self.ecart_min <= self.claps[-1] - self.claps[-2] <= self.ecart_max:
+            self.claps = []
+            self.dernier_reveil = t
+            return True
+        return False
+
+
+def reveiller(cfg, ev=None) -> None:
+    """Ouvre l'app Jarvis en plein écran (ou la ramène devant) et salue."""
+    (cfg.dossier / ".reveil").write_text(str(time.time()), encoding="utf-8")
+    app = Path.home() / "Applications" / "Jarvis.app"
+    if app.exists():
+        subprocess.Popen(["open", str(app)])
+    appel = (cfg["moi"]["appellations"] or ["Monsieur"])[0]
+    if ev is not None:
+        ev.publier("reveil", "Réveil", "double claquement", "raison")
+
+    def saluer():
+        try:
+            from . import voix
+
+            f = voix.synthetiser(cfg, f"À votre service, {appel}.", nom=f"reveil-{appel}")
+            if f:
+                time.sleep(1.2)
+                voix.jouer(f)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Salutation impossible : %s", exc)
+
+    threading.Thread(target=saluer, daemon=True).start()
+
+
+def ecouter(cfg, ev=None) -> None:
+    """Boucle d'écoute du micro (thread de fond). Ne fait rien si le micro est indisponible."""
+    try:
+        import sounddevice as sd
+    except Exception as exc:  # noqa: BLE001
+        log.info("Réveil par claquement indisponible (%s)", exc)
+        return
+    det = Detecteur(float(cfg["claquement"].get("sensibilite", 1.0) or 1.0))
+    log.info("Réveil par claquement de mains : à l'écoute")
+    while True:
+        try:
+            with sd.InputStream(samplerate=TAUX, channels=1, blocksize=BLOC, dtype="float32") as flux:
+                while True:
+                    donnees, _ = flux.read(BLOC)
+                    if det.bloc(donnees[:, 0].tolist()):
+                        log.info("Double claquement détecté")
+                        reveiller(cfg, ev)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Micro indisponible pour le claquement : %s — nouvel essai dans 30 s", exc)
+            time.sleep(30)

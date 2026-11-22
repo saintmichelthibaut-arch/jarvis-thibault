@@ -58,6 +58,7 @@ DEFAUTS: Dict[str, Any] = {
     "ecran": {"forme": "cerveau", "couleurs": "video", "plein_ecran": False, "panneaux": "auto"},
     "rappels": {"avant_rdv": 10},
     "moodle": {"actif": False, "url": ""},
+    "claquement": {"actif": True, "sensibilite": 1.0},
     "bilan": {"actif": True, "heure": "19:30", "lecture_auto": False},
     "ecoute": {"transcription": "gpt-4o-mini-transcribe"},
     "serveur": {"port": 8765},
