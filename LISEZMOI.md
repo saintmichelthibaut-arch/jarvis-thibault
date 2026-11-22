@@ -41,7 +41,7 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 
 **L'écran** : au repos, seul le cerveau est affiché. Les fenêtres (chiffres, agenda, devoirs…) apparaissent quand Jarvis en parle ou quand un événement arrive. Touche **D** ou bouton **Tableau** pour toutes les garder affichées.
 
-**Voix ElevenLabs** (la plus réaliste) : ajoutez la clé (`ajouter-cle.sh` → « ElevenLabs »), ajoutez des voix à « Mes voix » sur elevenlabs.io, puis `~/.jarvis/app/.venv/bin/jarvis-thibault elevenlabs` pour choisir celle de Jarvis.
+**Voix George (ElevenLabs, gratuit)** : créez un compte gratuit sur elevenlabs.io, copiez votre clé (Profil → API Keys), puis `bash ~/jarvis-thibault-main/ajouter-cle.sh` → « ElevenLabs ». Jarvis prend automatiquement la voix « George ». Si le quota gratuit du mois est épuisé, il repasse tout seul sur la voix OpenAI.
 
 **Choisir la voix** : `~/.jarvis/app/.venv/bin/jarvis-thibault voix` fait écouter 6 voix de majordome et enregistre celle que vous préférez.
 

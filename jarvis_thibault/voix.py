@@ -28,6 +28,7 @@ def dossier_audio(cfg) -> Path:
 
 
 ELEVEN = "https://api.elevenlabs.io/v1"
+GEORGE = "JBFqnCBsd6RMkjVDRZzb"  # voix « George » d'ElevenLabs (voix de base, offre gratuite)
 
 
 def elevenlabs_tts(cle: str, voix_id: str, texte: str, sortie: Path, modele: str = "eleven_flash_v2_5",
@@ -73,17 +74,23 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
     fournisseur = v.get("fournisseur", "openai")
     if fournisseur == "aucune" or not texte.strip():
         return None
-    nom = nom or hashlib.sha1(f"{fournisseur}{v}{texte}".encode()).hexdigest()[:16]
+    # Clé ElevenLabs présente → George (ou la voix choisie) d'office, OpenAI en secours
+    if fournisseur == "openai" and cfg.secret("elevenlabs_api_key") and v.get("auto_elevenlabs", True):
+        fournisseur = "elevenlabs"
+    voix_el = v.get("elevenlabs_voix") or GEORGE
+    suffixe = f"-el-{voix_el[:6]}" if fournisseur == "elevenlabs" else ""
+    nom = (nom or hashlib.sha1(f"{fournisseur}{v}{texte}".encode()).hexdigest()[:16]) + suffixe
     dossier = dossier_audio(cfg)
 
     if fournisseur == "elevenlabs":
         cle = cfg.secret("elevenlabs_api_key")
-        if cle and v.get("elevenlabs_voix"):
+        if cle:
             sortie = dossier / f"{nom}.mp3"
             if sortie.exists() and sortie.stat().st_size > 1000:
                 return sortie
             try:
-                return elevenlabs_tts(cle, v["elevenlabs_voix"], texte, sortie, v.get("elevenlabs_modele") or "eleven_flash_v2_5")
+                return elevenlabs_tts(cle, voix_el, texte, sortie, v.get("elevenlabs_modele") or "eleven_multilingual_v2",
+                                      {"stability": .55, "similarity_boost": .8, "style": .3, "use_speaker_boost": True})
             except Exception as exc:  # noqa: BLE001
                 import logging
 

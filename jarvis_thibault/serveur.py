@@ -249,7 +249,8 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             "ecran": cfg["ecran"],
             "voix": {"fournisseur": cfg["voix"]["fournisseur"], "effet": cfg["voix"].get("effet", "jarvis"),
                      "realiste": (cfg["voix"]["fournisseur"] == "openai" and bool(cfg.secret("openai_api_key")))
-                     or (cfg["voix"]["fournisseur"] == "elevenlabs" and bool(cfg.secret("elevenlabs_api_key")))},
+                     or bool(cfg.secret("elevenlabs_api_key")),
+                     "nom": "george" if cfg.secret("elevenlabs_api_key") else cfg["voix"]["voix"]},
             "transcription": bool(cfg.secret("openai_api_key")),
             "dernier_evenement": etat.ev.dernier_id,
             "demo": cfg.demo,
