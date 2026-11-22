@@ -10,9 +10,10 @@ chmod 600 "$SEC"
 
 if [[ "$(uname)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
   # Petites fenêtres du Mac : marche même lancé depuis Claude Code (« ! bash … »)
-  CHOIX=$(osascript -e 'choose from list {"OpenAI (sk-…)", "Stripe (rk_live_…)", "Base Fixigo (postgresql://…)"} with title "Jarvis" with prompt "Quelle clé voulez-vous ajouter ?" default items {"OpenAI (sk-…)"}' 2>/dev/null || echo false)
+  CHOIX=$(osascript -e 'choose from list {"OpenAI (sk-…)", "ElevenLabs (voix)", "Stripe (rk_live_…)", "Base Fixigo (postgresql://…)"} with title "Jarvis" with prompt "Quelle clé voulez-vous ajouter ?" default items {"OpenAI (sk-…)"}' 2>/dev/null || echo false)
   case "$CHOIX" in
     OpenAI*) CLE=openai_api_key ;;
+    ElevenLabs*) CLE=elevenlabs_api_key ;;
     Stripe*) CLE=stripe_api_key ;;
     Base*) CLE=base_url ;;
     *) echo "Annulé, rien n'a changé."; exit 0 ;;

@@ -26,6 +26,46 @@ def dossier_audio(cfg) -> Path:
     return p
 
 
+ELEVEN = "https://api.elevenlabs.io/v1"
+
+
+def elevenlabs_tts(cle: str, voix_id: str, texte: str, sortie: Path, modele: str = "eleven_flash_v2_5",
+                   reglages: Optional[dict] = None, transport=None, avec_langue: bool = True) -> Path:
+    """Synthèse ElevenLabs → fichier mp3."""
+    import httpx
+
+    if not voix_id:
+        raise ValueError("Aucune voix ElevenLabs choisie : lancez « jarvis-thibault elevenlabs »")
+    corps = {"text": texte[:4500], "model_id": modele,
+             "voice_settings": reglages or {"stability": .5, "similarity_boost": .8, "style": .25, "use_speaker_boost": True}}
+    if avec_langue:
+        corps["language_code"] = "fr"
+    with httpx.Client(timeout=40, transport=transport) as c:
+        r = c.post(f"{ELEVEN}/text-to-speech/{voix_id}", params={"output_format": "mp3_44100_128"},
+                   headers={"xi-api-key": cle, "accept": "audio/mpeg"}, json=corps)
+    if r.status_code == 401:
+        raise PermissionError("Clé ElevenLabs refusée (401) : vérifiez-la avec ajouter-cle.sh")
+    if r.status_code in (400, 422) and avec_langue:
+        return elevenlabs_tts(cle, voix_id, texte, sortie, modele, reglages, transport, avec_langue=False)
+    r.raise_for_status()
+    sortie.write_bytes(r.content)
+    return sortie
+
+
+def elevenlabs_voix(cle: str, transport=None) -> list:
+    """Les voix de « Mes voix » sur ElevenLabs (celles ajoutées depuis la Voice Library)."""
+    import httpx
+
+    with httpx.Client(timeout=30, transport=transport) as c:
+        r = c.get(f"{ELEVEN}/voices", headers={"xi-api-key": cle})
+    if r.status_code == 401:
+        raise PermissionError("Clé ElevenLabs refusée (401)")
+    r.raise_for_status()
+    return [{"id": v["voice_id"], "nom": v.get("name", "?"), "categorie": v.get("category", ""),
+             "description": ((v.get("labels") or {}).get("description") or (v.get("labels") or {}).get("accent") or "")}
+            for v in r.json().get("voices", [])]
+
+
 def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
     """Transforme le texte en fichier audio. Renvoie None si la voix est désactivée."""
     v = cfg["voix"]
@@ -34,6 +74,20 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
         return None
     nom = nom or hashlib.sha1(f"{fournisseur}{v}{texte}".encode()).hexdigest()[:16]
     dossier = dossier_audio(cfg)
+
+    if fournisseur == "elevenlabs":
+        cle = cfg.secret("elevenlabs_api_key")
+        if cle and v.get("elevenlabs_voix"):
+            sortie = dossier / f"{nom}.mp3"
+            if sortie.exists() and sortie.stat().st_size > 1000:
+                return sortie
+            try:
+                return elevenlabs_tts(cle, v["elevenlabs_voix"], texte, sortie, v.get("elevenlabs_modele") or "eleven_flash_v2_5")
+            except Exception as exc:  # noqa: BLE001
+                import logging
+
+                logging.getLogger("jarvis.voix").warning("ElevenLabs indisponible (%s) : voix OpenAI en secours", exc)
+        fournisseur = "openai"  # secours
 
     if fournisseur == "openai":
         cle = cfg.secret("openai_api_key")

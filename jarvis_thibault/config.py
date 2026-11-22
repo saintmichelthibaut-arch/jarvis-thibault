@@ -35,6 +35,8 @@ DEFAUTS: Dict[str, Any] = {
         "fournisseur": "openai",
         "modele": "gpt-4o-mini-tts",
         "voix": "onyx",
+        "elevenlabs_voix": "",
+        "elevenlabs_modele": "eleven_flash_v2_5",
         "style": "jarvis",
         "effet": "jarvis",
         "consignes": (

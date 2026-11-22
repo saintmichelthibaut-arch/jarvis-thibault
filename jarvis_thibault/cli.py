@@ -17,6 +17,7 @@ def main(argv=None) -> int:
     sub.add_parser("moodle", help="connecter Jarvis à votre Moodle")
     sub.add_parser("claquement", help="tester la détection du clap-clap")
     sub.add_parser("voix", help="écouter et choisir la voix de Jarvis")
+    sub.add_parser("elevenlabs", help="choisir la voix ElevenLabs de Jarvis")
     sub.add_parser("bilan", help="générer le bilan du soir maintenant")
     b = sub.add_parser("briefing", help="générer le briefing maintenant")
     b.add_argument("--lire", action="store_true", help="le lire à voix haute sur le Mac")
@@ -31,6 +32,16 @@ def main(argv=None) -> int:
 
         demarrer(port=args.port, demo=demo, ouvrir=args.ouvrir)
         return 0
+
+    if args.cmd == "elevenlabs":
+        from .choix_elevenlabs import choisir as choisir_eleven
+
+        r = choisir_eleven()
+        import subprocess
+
+        subprocess.run("pkill -f 'jarvis_thibault.cli serveur'; pkill -f 'jarvis-thibault serveur'; sleep 1; "
+                       "bash ~/.jarvis/app/lancer.sh --silencieux", shell=True)
+        return r
 
     if args.cmd == "voix":
         from .choix_voix import choisir

@@ -41,6 +41,8 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 
 **L'écran** : au repos, seul le cerveau est affiché. Les fenêtres (chiffres, agenda, devoirs…) apparaissent quand Jarvis en parle ou quand un événement arrive. Touche **D** ou bouton **Tableau** pour toutes les garder affichées.
 
+**Voix ElevenLabs** (la plus réaliste) : ajoutez la clé (`ajouter-cle.sh` → « ElevenLabs »), ajoutez des voix à « Mes voix » sur elevenlabs.io, puis `~/.jarvis/app/.venv/bin/jarvis-thibault elevenlabs` pour choisir celle de Jarvis.
+
 **Choisir la voix** : `~/.jarvis/app/.venv/bin/jarvis-thibault voix` fait écouter 6 voix de majordome et enregistre celle que vous préférez.
 
 **Clap-clap** : même quand la fenêtre est fermée, **frappez deux fois dans vos mains** et Jarvis s'ouvre en plein écran : « À votre service, Monsieur. », puis il vous écoute : dites directement votre question. (Le micro écoute en continu : macOS affiche un point orange dans la barre des menus. Pour couper : `actif = false` dans la section `[claquement]` de `~/.jarvis/config.toml`.)

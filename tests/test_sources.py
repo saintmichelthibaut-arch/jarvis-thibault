@@ -226,3 +226,29 @@ def test_reponse_en_flux(tmp_path, monkeypatch):
                     phrases.append(o["texte"])
     assert phrases == ["Bonjour Monsieur, tout va bien.", "Deuxième phrase un peu plus longue."]
     assert instants[0] < 1.0 < instants[1]
+
+
+def test_elevenlabs(tmp_path):
+    import json
+
+    import httpx
+
+    from jarvis_thibault.voix import elevenlabs_tts, elevenlabs_voix
+
+    vus = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.headers["xi-api-key"] == "cle"
+        if req.url.path == "/v1/voices":
+            return httpx.Response(200, json={"voices": [{"voice_id": "abc", "name": "Majordome", "category": "professional",
+                                                         "labels": {"accent": "british"}}]})
+        corps = json.loads(req.content)
+        vus.append(corps)
+        if "language_code" in corps:
+            return httpx.Response(422, json={"detail": "language_code non supporté"})
+        return httpx.Response(200, content=b"ID3" + b"0" * 2000)
+
+    t = httpx.MockTransport(handler)
+    assert elevenlabs_voix("cle", transport=t)[0] == {"id": "abc", "nom": "Majordome", "categorie": "professional", "description": "british"}
+    f = elevenlabs_tts("cle", "abc", "Bonjour Monsieur.", tmp_path / "a.mp3", transport=t)
+    assert f.read_bytes().startswith(b"ID3") and len(vus) == 2 and vus[1]["text"] == "Bonjour Monsieur."
