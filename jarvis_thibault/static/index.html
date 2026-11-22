@@ -492,6 +492,10 @@ const CERVEAU=(function(){
     return{a,dx,dy,zz,L,cur:rnd(-1.6,1.6),amp:rnd(.35,1.15),fq:rnd(.9,2.5),ph:rnd(0,6.28),v:rnd(.12,.36),w:rnd(.45,1.25),b:Math.random(),
       ne:performance.now()/1000,vie:vers!=null?rnd(2.5,4):rnd(4,10),pousse:rnd(.5,1.4),region:vers,chaud:vers!=null}}
   for(let i=0;i<NF;i++){const f=nouveauFil();f.ne-=rnd(0,f.vie);fils.push(f)}
+  const fibres=Array.from({length:mob?70:150},()=>{const u=rnd(-1,1),t=rnd(0,6.2832),q=Math.sqrt(1-u*u),n=[Math.cos(t)*q,u,Math.sin(t)*q];
+    let a=Math.abs(n[1])<.9?[0,1,0]:[1,0,0];const dt=a[0]*n[0]+a[1]*n[1]+a[2]*n[2];a=[a[0]-dt*n[0],a[1]-dt*n[1],a[2]-dt*n[2]];const la=Math.hypot(...a);a=a.map(x=>x/la);
+    const b=[n[1]*a[2]-n[2]*a[1],n[2]*a[0]-n[0]*a[2],n[0]*a[1]-n[1]*a[0]];
+    return{a,b,r:rnd(.9,1.01),ph:rnd(0,6.2832),v:rnd(-.3,.3),ext:rnd(.35,.95)*6.2832}});
   const etincelles=[],ondes=[];
   const etoiles=Array.from({length:mob?90:220},()=>[Math.random(),Math.random(),Math.random()]);
   let proj=null,S=1,C={x:0,y:0},cache={},dernierT=0,PN=[],flash=0;
@@ -551,32 +555,48 @@ const CERVEAU=(function(){
     // ondes de choc (événements)
     for(let k=ondes.length-1;k>=0;k--){const o=ondes[k],age=(tt-o.t)/1.6;if(age>1){ondes.splice(k,1);continue}
       g.strokeStyle=hexA(pal[o.col],(1-age)*.6);g.lineWidth=2*(1-age)+.5;g.beginPath();g.ellipse(C.x,C.y,S*(1.1+age*3),S*(1+age*2.7),0,0,6.2832);g.stroke()}
-    // noyau : nuage bleu plat, bords irréguliers et mouvants
-    g.globalCompositeOperation="source-over";
-    const forme=(ech,col,al)=>{g.beginPath();for(let i=0;i<=96;i++){const an=i/96*6.2832,
-        rr=S*ech*(1+.09*Math.sin(an*3+tt*.6)+.06*Math.sin(an*5-tt*.9)+.045*Math.sin(an*9+tt*1.4)+.03*Math.sin(an*14-tt*.8)+L*.06*Math.sin(an*6+tt*7));
-        const x=C.x+Math.cos(an)*rr*1.1,y=C.y+Math.sin(an)*rr;i?g.lineTo(x,y):g.moveTo(x,y)}g.globalAlpha=al;g.fillStyle=col;g.fill();g.globalAlpha=1};
-    forme(1.14,"#1a3ab8",.12);forme(1.05,"#1735ad",.38);forme(1,"#132c96",.94);
-    for(let k=0;k<6;k++){const an=k*1.05+tt*.12*(k%2?1:-1),d=S*(.25+.3*((k*37)%10)/10),x=C.x+Math.cos(an)*d,y=C.y+Math.sin(an)*d*.9,rr=S*(.35+.1*Math.sin(tt*.7+k));
-      gr=g.createRadialGradient(x,y,0,x,y,rr);gr.addColorStop(0,k%2?"rgba(6,18,95,.5)":"rgba(70,120,255,.2)");gr.addColorStop(1,"rgba(30,70,230,0)");
-      g.fillStyle=gr;g.beginPath();g.arc(x,y,rr,0,6.2832);g.fill()}
+    // noyau : sphère nette faite de fils (pelote lumineuse)
+    const SN=S*1.32;g.globalCompositeOperation="source-over";
+    gr=g.createRadialGradient(C.x-SN*.28,C.y-SN*.3,SN*.05,C.x,C.y,SN);gr.addColorStop(0,"#2f63ff");gr.addColorStop(.55,"#1638c4");gr.addColorStop(.92,"#0b1f86");gr.addColorStop(1,"#163cc8");
+    g.fillStyle=gr;g.beginPath();g.arc(C.x,C.y,SN,0,6.2832);g.fill();
+    g.globalCompositeOperation="lighter";const arriere=new Path2D(),avant=new Path2D(),points=[];
+    fibres.forEach(f=>{const d0=f.ph+tt*f.v,N=34;let prev=null;
+      for(let i=0;i<=N;i++){const th=d0+f.ext*i/N,w=f.r*(1+.025*Math.sin(th*5+tt*1.3+f.ph)+L*.04*Math.sin(th*9+tt*8)),
+          P=proj([1.32*w*(f.a[0]*Math.cos(th)+f.b[0]*Math.sin(th)),1.32*w*(f.a[1]*Math.cos(th)+f.b[1]*Math.sin(th)),1.32*w*(f.a[2]*Math.cos(th)+f.b[2]*Math.sin(th))]);
+        if(prev){const chemin=(prev[2]+P[2])<0?avant:arriere;chemin.moveTo(prev[0],prev[1]);chemin.lineTo(P[0],P[1])}
+        if(i%11===5&&P[2]<0)points.push(P);prev=P}});
+    g.lineWidth=.6;g.strokeStyle=`rgba(90,150,255,${.22+L*.2})`;g.stroke(arriere);
+    g.lineWidth=.9;g.strokeStyle=`rgba(165,215,255,${.5+L*.35})`;g.stroke(avant);
+    g.fillStyle=`rgba(235,248,255,${.75+L*.25})`;points.forEach(P=>{g.beginPath();g.arc(P[0],P[1],1.3,0,6.2832);g.fill()});
+    gr=g.createRadialGradient(C.x,C.y,SN*.82,C.x,C.y,SN*1.08);gr.addColorStop(0,"rgba(60,130,255,0)");gr.addColorStop(.75,`rgba(110,180,255,${.28+L*.25})`);gr.addColorStop(1,"rgba(60,130,255,0)");
+    g.fillStyle=gr;g.beginPath();g.arc(C.x,C.y,SN*1.08,0,6.2832);g.fill();
+    g.strokeStyle=`rgba(185,225,255,${.55+L*.3})`;g.lineWidth=1.1;g.beginPath();g.arc(C.x,C.y,SN,0,6.2832);g.stroke();
+    // cœur du réacteur (inspiré du logo OpenJarvis) : pulse avec la voix
+    const pouls=1+.06*Math.sin(tt*2.2)+L*.5,RC=SN*.34*pouls;
+    gr=g.createRadialGradient(C.x,C.y,0,C.x,C.y,RC*2.2);gr.addColorStop(0,`rgba(255,255,255,${.85+L*.15})`);gr.addColorStop(.18,`rgba(200,245,255,${.75})`);
+    gr.addColorStop(.45,`rgba(90,200,255,${.35+L*.25})`);gr.addColorStop(1,"rgba(40,110,255,0)");g.fillStyle=gr;g.beginPath();g.arc(C.x,C.y,RC*2.2,0,6.2832);g.fill();
+    g.strokeStyle=`rgba(190,240,255,${.55+L*.3})`;g.lineWidth=1;g.beginPath();g.arc(C.x,C.y,RC*.95,0,6.2832);g.stroke();
+    // anneaux segmentés qui tournent autour de la sphère
+    [[SN*1.13,tt*.12,10,.06,1.6,.55],[SN*1.2,-tt*.07,36,.03,.8,.4],[SN*.62,-tt*.25,8,.12,1.2,.35]].forEach(([r,rot,n,trou,lw,al])=>{
+      g.strokeStyle=`rgba(150,210,255,${al+L*.3})`;g.lineWidth=lw;
+      for(let i=0;i<n;i++){const a0=rot+i/n*6.2832+trou,a1=rot+(i+1)/n*6.2832-trou;g.beginPath();g.arc(C.x,C.y,r,a0,a1);g.stroke()}});
     // bande électrique sur le bord (crépite, explose quand Jarvis parle ou par moments)
     g.globalCompositeOperation="lighter";
     const ra=Math.PI+Math.sin(tt*.3)*.6+Math.sin(tt*.07)*.4;angleEclat=ra;
     if(Math.random()<.0035)flash=1;flash*=.93;
     const force=.55+L*1.2+flash*1.2+(mode==="reflexion"?.25:0),span=.55+L*.55+flash*.4;
-    const rx=C.x+Math.cos(ra)*S*1.12,ry=C.y+Math.sin(ra)*S;gr=g.createRadialGradient(rx,ry,0,rx,ry,S*(.75+L*1.6+flash*1.4));
+    const rx=C.x+Math.cos(ra)*SN*1.12,ry=C.y+Math.sin(ra)*S;gr=g.createRadialGradient(rx,ry,0,rx,ry,SN*(.75+L*1.6+flash*1.4));
     gr.addColorStop(0,`rgba(255,255,255,${Math.min(.95,.3+L*.45+flash*.45)})`);gr.addColorStop(.3,`rgba(130,220,255,${Math.min(.7,.18+L*.35+flash*.3)})`);gr.addColorStop(1,"rgba(40,120,255,0)");
-    g.fillStyle=gr;g.beginPath();g.arc(rx,ry,S*(.75+L*1.6+flash*1.4),0,6.2832);g.fill();
+    g.fillStyle=gr;g.beginPath();g.arc(rx,ry,SN*(.75+L*1.6+flash*1.4),0,6.2832);g.fill();
     for(let k=0;k<3;k++){const a0=ra-span+Math.random()*.25,a1=ra+span-Math.random()*.25,pts=[];
-      for(let i=0;i<=18;i++){const an=a0+(a1-a0)*i/18,j=(Math.random()-.5)*S*.09*(1+L+flash),rr=S*1.05+j;pts.push([C.x+Math.cos(an)*rr*1.1,C.y+Math.sin(an)*rr])}
+      for(let i=0;i<=18;i++){const an=a0+(a1-a0)*i/18,j=(Math.random()-.5)*SN*.09*(1+L+flash),rr=SN*1.05+j;pts.push([C.x+Math.cos(an)*rr,C.y+Math.sin(an)*rr])}
       [[4*(1+L),`rgba(80,190,255,${Math.min(.4,.12*force)})`],[1.6,`rgba(170,232,255,${Math.min(.8,.4*force)})`],[.8,`rgba(255,255,255,${Math.min(1,.95*force)})`]].forEach(([lw,c])=>{
         g.lineWidth=lw;g.strokeStyle=c;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke()})}
     g.strokeStyle=`rgba(225,247,255,${Math.min(.9,.4*force)})`;g.lineWidth=1.2;g.beginPath();
-    for(let k=0;k<6+L*36+flash*40;k++){const an=ra+rnd(-span,span),r0=S*1.07,len=S*rnd(.12,.55)*(1+L*1.6+flash),x0=C.x+Math.cos(an)*r0*1.1,y0=C.y+Math.sin(an)*r0;
+    for(let k=0;k<6+L*36+flash*40;k++){const an=ra+rnd(-span,span),r0=SN*1.07,len=SN*rnd(.12,.55)*(1+L*1.6+flash),x0=C.x+Math.cos(an)*r0,y0=C.y+Math.sin(an)*r0;
       g.moveTo(x0,y0);g.lineTo(x0+Math.cos(an+rnd(-.3,.3))*len,y0+Math.sin(an+rnd(-.3,.3))*len)}g.stroke();
-    const rb=ra+Math.PI*.9+Math.sin(tt*.5)*.3,bx=C.x+Math.cos(rb)*S*1.05,by=C.y+Math.sin(rb)*S*.95;gr=g.createRadialGradient(bx,by,0,bx,by,S*(.9+L*1.2));
-    gr.addColorStop(0,`rgba(220,245,255,${.08+L*.3})`);gr.addColorStop(1,"rgba(60,140,255,0)");g.fillStyle=gr;g.beginPath();g.arc(bx,by,S*(.9+L*1.2),0,6.2832);g.fill();
+    const rb=ra+Math.PI*.9+Math.sin(tt*.5)*.3,bx=C.x+Math.cos(rb)*SN*1.05,by=C.y+Math.sin(rb)*SN*.95;gr=g.createRadialGradient(bx,by,0,bx,by,SN*(.9+L*1.2));
+    gr.addColorStop(0,`rgba(220,245,255,${.08+L*.3})`);gr.addColorStop(1,"rgba(60,140,255,0)");g.fillStyle=gr;g.beginPath();g.arc(bx,by,SN*(.9+L*1.2),0,6.2832);g.fill();
     g.globalCompositeOperation="source-over";
     if(lueur){const lw=Math.max(1,innerWidth/2|0),lh=Math.max(1,innerHeight/2|0);if(lueur.width!==lw||lueur.height!==lh){lueur.width=lw;lueur.height=lh}
       lg.globalCompositeOperation="copy";lg.drawImage(cv,0,0,lw,lh)}}
