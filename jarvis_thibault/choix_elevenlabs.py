@@ -64,3 +64,34 @@ def choisir() -> int:
     print(f"✓ Jarvis parle maintenant avec la voix ElevenLabs « {choisie['nom']} ».")
     print("  Pour en changer : relancez cette commande. Pour revenir à OpenAI : fournisseur = \"openai\" dans [voix].")
     return 0
+
+
+def regler(lien: str) -> int:
+    """Règle directement la voix à partir d'un lien elevenlabs.io/voices/<id> ou d'un identifiant, puis la fait écouter."""
+    from . import voix
+
+    vid = lien.rstrip("/").split("/")[-1].split("?")[0].strip()
+    if not re.fullmatch(r"[A-Za-z0-9]{15,40}", vid):
+        print(f"Identifiant de voix illisible : {lien}")
+        return 1
+    conf = DOSSIER / "config.toml"
+    _ecrire(conf, "elevenlabs_voix", vid)
+    cfg = charger()
+    if not cfg.secret("elevenlabs_api_key"):
+        print("Voix enregistrée. Ajoutez maintenant la clé : bash ~/jarvis-thibault-main/ajouter-cle.sh → « ElevenLabs ».")
+        return 0
+    appel = (cfg["moi"]["appellations"] or ["Monsieur"])[0]
+    sortie = voix.dossier_audio(cfg) / f"essai-{vid}.mp3"
+    try:
+        voix.elevenlabs_tts(cfg.secret("elevenlabs_api_key"), vid, f"Bonsoir {appel}. Tous les systèmes sont opérationnels.", sortie,
+                            cfg["voix"].get("elevenlabs_modele") or "eleven_multilingual_v2")
+    except Exception as exc:  # noqa: BLE001
+        print(f"✗ ElevenLabs refuse cette voix : {exc}")
+        if "free" in str(exc).lower() or "402" in str(exc) or "401" in str(exc) or "library" in str(exc).lower():
+            print("  → Les voix de la bibliothèque demandent souvent un abonnement payant pour l'API.")
+        print("  Jarvis utilisera George (gratuit) en attendant. Pensez aussi à « Add to my voices » sur la page de la voix.")
+        return 1
+    if platform.system() == "Darwin" and shutil.which("afplay"):
+        subprocess.run(["afplay", str(sortie)])
+    print("✓ Voix adoptée : Jarvis parle maintenant avec elle.")
+    return 0

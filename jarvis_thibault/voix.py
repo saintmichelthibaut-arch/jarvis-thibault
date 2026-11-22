@@ -47,9 +47,10 @@ def elevenlabs_tts(cle: str, voix_id: str, texte: str, sortie: Path, modele: str
                    headers={"xi-api-key": cle, "accept": "audio/mpeg"}, json=corps)
     if r.status_code == 401:
         raise PermissionError("Clé ElevenLabs refusée (401) : vérifiez-la avec ajouter-cle.sh")
-    if r.status_code in (400, 422) and avec_langue:
+    if r.status_code in (400, 422) and avec_langue and "language" in r.text.lower():
         return elevenlabs_tts(cle, voix_id, texte, sortie, modele, reglages, transport, avec_langue=False)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        raise ValueError(f"ElevenLabs {r.status_code} : {r.text[:200]}")
     sortie.write_bytes(r.content)
     return sortie
 
@@ -88,13 +89,15 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
             sortie = dossier / f"{nom}.mp3"
             if sortie.exists() and sortie.stat().st_size > 1000:
                 return sortie
-            try:
-                return elevenlabs_tts(cle, voix_el, texte, sortie, v.get("elevenlabs_modele") or "eleven_multilingual_v2",
-                                      {"stability": .55, "similarity_boost": .8, "style": .3, "use_speaker_boost": True})
-            except Exception as exc:  # noqa: BLE001
-                import logging
+            import logging
 
-                logging.getLogger("jarvis.voix").warning("ElevenLabs indisponible (%s) : voix OpenAI en secours", exc)
+            reglages = {"stability": .55, "similarity_boost": .8, "style": .3, "use_speaker_boost": True}
+            modele = v.get("elevenlabs_modele") or "eleven_multilingual_v2"
+            for vid in dict.fromkeys([voix_el, GEORGE]):  # la voix choisie, puis George en secours
+                try:
+                    return elevenlabs_tts(cle, vid, texte, sortie, modele, reglages)
+                except Exception as exc:  # noqa: BLE001
+                    logging.getLogger("jarvis.voix").warning("ElevenLabs (voix %s) refusée : %s", vid, str(exc)[:200])
         fournisseur = "openai"  # secours
 
     if fournisseur == "openai":
