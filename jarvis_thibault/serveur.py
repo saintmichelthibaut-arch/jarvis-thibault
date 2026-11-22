@@ -253,8 +253,16 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
                      "nom": "george" if cfg.secret("elevenlabs_api_key") else cfg["voix"]["voix"]},
             "transcription": bool(cfg.secret("openai_api_key")),
             "dernier_evenement": etat.ev.dernier_id,
+            "micro": __import__("jarvis_thibault.claquement", fromlist=["x"]).ETAT_MICRO.get("ok"),
             "demo": cfg.demo,
         }
+
+    version_lancee = ((cfg.dossier / "app" / "version").read_text().strip()
+                      if (cfg.dossier / "app" / "version").exists() else "dev")
+
+    @app.get("/api/version")
+    def api_version():
+        return {"version": version_lancee}
 
     @app.get("/api/evenements")
     def api_evenements(depuis: int = 0):

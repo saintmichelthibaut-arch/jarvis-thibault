@@ -122,14 +122,7 @@ fi
 
 # ─── 6. L'app « Jarvis » + démarrage automatique ────────────────────
 bleu "6/7  Création de l'app Jarvis"
-cp "$ICI/lancer.sh" "$JH/app/lancer.sh"
-chmod +x "$JH/app/lancer.sh"
-mkdir -p "$HOME/Applications"
-bash "$ICI/creer-app.sh"
-osascript -e "tell application \"System Events\" to delete (every login item whose name is \"Jarvis\")" >/dev/null 2>&1 || true
-osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$APP\", hidden:true}" >/dev/null 2>&1 \
-  && ok "Jarvis démarrera tout seul à l'ouverture de session" \
-  || info "Ajoutez Jarvis à « Ouverture » dans Réglages Système → Général → Ouverture"
+bash "$ICI/installer-veille.sh"
 ok "App créée : $APP"
 
 # ─── 7. Vérification ────────────────────────────────────────────────

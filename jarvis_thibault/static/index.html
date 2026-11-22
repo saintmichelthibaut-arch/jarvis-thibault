@@ -274,7 +274,7 @@ function rendre(){
     ["Météo",ok("meteo")?"live":"hors ligne",ok("meteo")?"":"ko"],["Tâches",ok("taches")?"live":"hors ligne",ok("taches")?"":"ko"],
     ["Mémoire",`${(d.memoire||[]).length} souv.`,""],["Rappels",`${(d.rappels||[]).length}`,""],
     ["Cerveau",esc((ETAT.cerveau||"ok").split(" · ")[0]),""],["Voix",ETAT.voix&&ETAT.voix.realiste?(ETAT.voix.nom||"jarvis"):"robot",ETAT.voix&&ETAT.voix.realiste?"":"prevu"],
-    ["Écoute",ETAT.transcription||window.SpeechRecognition||window.webkitSpeechRecognition?"ok":"—",""]];
+    ["Micro",ETAT.micro===false?"bloqué":(ETAT.micro?"ok":"…"),ETAT.micro===false?"ko":""],["Écoute",ETAT.transcription||window.SpeechRecognition||window.webkitSpeechRecognition?"ok":"—",""]];
   $("#modules").innerHTML=`<div class="titre"><span>Systèmes</span><span>${lignes.filter(l=>!l[2]).length}/${lignes.length}</span></div>`+lignes.map(([n,e,c])=>`<div class="mod ${c}"><b>${n}</b><span>${e}</span><i></i></div>`).join("");
   NOEUDS.maj(d);
   if(!statutLocal||statutLocal==="veille")statut(ETAT.statut);
@@ -405,7 +405,7 @@ function suivreNiveau(on){clearInterval(pollNiveau);MIC.niveau=0;if(on)pollNivea
 async function ecouterServeur(){if(ecouteServeur||occupe)return;ecouteServeur=true;if(lecteur&&!lecteur.paused)lecteur.pause();
   statut("ecoute");transcript("je vous écoute…");afficher("");afficherAide("");suivreNiveau(true);$("#btnEcoute").classList.add("on");
   try{const r=await fetch("/api/ecouter",{method:"POST"});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||"erreur "+r.status);
-    fini();if(j.texte)return demander(j.texte);statut("veille");transcript(INVITE)}
+    fini();if(j.texte)return demander(j.texte);statut("veille");transcript(INVITE);afficher("Je n'ai rien entendu, "+appellation+".");afficherAide("Parlez juste après le signal, un peu plus fort ou plus près du Mac.")}
   catch(e){fini();statut("veille");afficher("Je n'entends pas le micro, "+appellation+".");afficherAide(String(e.message||e))}
   function fini(){suivreNiveau(false);ecouteServeur=false;$("#btnEcoute").classList.remove("on")}}
 function dictee(){if(ecoute){reco.stop();return}if(lecteur&&!lecteur.paused)lecteur.pause();

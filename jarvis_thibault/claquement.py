@@ -20,6 +20,7 @@ log = logging.getLogger("jarvis.claquement")
 
 TAUX = 16000
 BLOC = 256  # 16 ms
+ETAT_MICRO: dict = {"ok": None}
 
 
 class Detecteur:
@@ -127,16 +128,28 @@ def ecouter(cfg, ev=None) -> None:
                         if time.monotonic() - debut > 8:
                             signale = True
                             if maxi < 1e-4:
+                                ETAT_MICRO["ok"] = False
                                 log.warning("Micro : SILENCE TOTAL — macOS bloque le micro pour ce processus. "
-                                            "Réglages Système → Confidentialité et sécurité → Micro : activez Terminal et Jarvis.")
-                            else:
-                                log.info("Micro : OK (niveau max %.3f sur 8 s)", maxi)
+                                            "Réglages Système → Confidentialité et sécurité → Micro : activez Jarvis.")
+                                prevenir = time.time() - ETAT_MICRO.get("prevenu", 0) > 3600
+                                if prevenir:
+                                    ETAT_MICRO["prevenu"] = time.time()
+                                if ev is not None and prevenir:
+                                    ev.publier("micro", "Micro bloqué", "Réglages Système → Confidentialité → Micro → activez Jarvis", "raison")
+                                from .voix import notifier
+
+                                if prevenir:
+                                    notifier("Jarvis", "Je n'ai pas accès au micro : Réglages Système → Confidentialité → Micro → activez Jarvis.")
+                                break  # on réessaie dans 30 s (au cas où l'accès vient d'être donné)
+                            ETAT_MICRO["ok"] = True
+                            log.info("Micro : OK (niveau max %.3f sur 8 s)", maxi)
                     if det.bloc(donnees[:, 0].tolist()):
                         log.info("Double claquement détecté")
                         reveiller(cfg, ev)
         except Exception as exc:  # noqa: BLE001
+            ETAT_MICRO["ok"] = False
             log.warning("Micro indisponible pour le claquement : %s — nouvel essai dans 30 s", exc)
-            time.sleep(30)
+        time.sleep(30)
 
 
 def diagnostic(secondes: float = 6.0) -> int:

@@ -5,7 +5,7 @@ set -euo pipefail
 ICI="$(cd "$(dirname "$0")" && pwd)"
 JH="${JARVIS_HOME:-$HOME/.jarvis}"
 APP="$HOME/Applications/Jarvis.app"
-VERSION="3"
+VERSION="4"
 
 # Déjà à jour ? On ne touche à rien (sinon macOS redemanderait les autorisations).
 if [[ -f "$APP/Contents/Resources/version-jarvis" && "$(cat "$APP/Contents/Resources/version-jarvis")" == "$VERSION" ]]; then
@@ -27,7 +27,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key><string>Jarvis</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>3.0</string>
-  <key>CFBundleVersion</key><string>3</string>
+  <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
   <key>NSHighResolutionCapable</key><true/>
@@ -39,10 +39,7 @@ PLIST
 
 cat > "$APP/Contents/MacOS/Jarvis" <<'SH'
 #!/bin/bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
-JH="${JARVIS_HOME:-$HOME/.jarvis}"
-bash "$JH/app/lancer.sh" --silencieux
-exec "$JH/app/.venv/bin/python" -m jarvis_thibault.cli app
+exec /bin/bash "$HOME/.jarvis/app/demarrer-app.sh" "$@"
 SH
 chmod +x "$APP/Contents/MacOS/Jarvis"
 echo "$VERSION" > "$APP/Contents/Resources/version-jarvis"

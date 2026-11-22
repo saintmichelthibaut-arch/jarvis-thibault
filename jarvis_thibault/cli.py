@@ -16,6 +16,7 @@ def main(argv=None) -> int:
     sub.add_parser("app", help="ouvrir Jarvis dans sa propre fenêtre (Mac)")
     sub.add_parser("moodle", help="connecter Jarvis à votre Moodle")
     sub.add_parser("claquement", help="tester la détection du clap-clap")
+    sub.add_parser("ecoute", help="tester la reconnaissance de la voix")
     sub.add_parser("voix", help="écouter et choisir la voix de Jarvis")
     e = sub.add_parser("elevenlabs", help="choisir la voix ElevenLabs de Jarvis (lien de la voix, ou liste)")
     e.add_argument("voix", nargs="?", help="lien elevenlabs.io/voices/… ou identifiant")
@@ -40,14 +41,19 @@ def main(argv=None) -> int:
         r = regler(args.voix) if args.voix else choisir_eleven()
         import subprocess
 
-        subprocess.run("pkill -f 'jarvis_thibault.cli serveur'; pkill -f 'jarvis-thibault serveur'; sleep 1; "
-                       "bash ~/.jarvis/app/lancer.sh --silencieux", shell=True)
+        subprocess.run("bash ~/.jarvis/app/lancer.sh --redemarrer", shell=True)
         return r
 
     if args.cmd == "voix":
         from .choix_voix import choisir
 
         return choisir()
+
+    if args.cmd == "ecoute":
+        from .config import charger as _ch
+        from .ecoute import diagnostic as diag_ecoute
+
+        return diag_ecoute(_ch())
 
     if args.cmd == "claquement":
         from .claquement import diagnostic
