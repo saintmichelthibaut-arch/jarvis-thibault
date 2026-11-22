@@ -119,8 +119,18 @@ def ecouter(cfg, ev=None) -> None:
     while True:
         try:
             with sd.InputStream(samplerate=TAUX, channels=1, blocksize=BLOC, dtype="float32") as flux:
+                debut, maxi, signale = time.monotonic(), 0.0, False
                 while True:
                     donnees, _ = flux.read(BLOC)
+                    if not signale:
+                        maxi = max(maxi, float(abs(donnees).max()))
+                        if time.monotonic() - debut > 8:
+                            signale = True
+                            if maxi < 1e-4:
+                                log.warning("Micro : SILENCE TOTAL — macOS bloque le micro pour ce processus. "
+                                            "Réglages Système → Confidentialité et sécurité → Micro : activez Terminal et Jarvis.")
+                            else:
+                                log.info("Micro : OK (niveau max %.3f sur 8 s)", maxi)
                     if det.bloc(donnees[:, 0].tolist()):
                         log.info("Double claquement détecté")
                         reveiller(cfg, ev)
