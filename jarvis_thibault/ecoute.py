@@ -16,6 +16,7 @@ TAUX = 16000
 BLOC = 480  # 30 ms
 VERROU = threading.Lock()
 niveau_actuel = {"v": 0.0}
+ANNULER = threading.Event()
 
 
 def _rms(b) -> float:
@@ -29,15 +30,21 @@ def _rms(b) -> float:
 
 
 def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.0, duree_max: float = 15.0,
-                       sur_niveau: Optional[Callable[[float], None]] = None, journal: Optional[dict] = None) -> Optional[bytes]:
+                       sur_niveau: Optional[Callable[[float], None]] = None, journal: Optional[dict] = None,
+                       interruption: bool = False, sur_debut: Optional[Callable[[], None]] = None,
+                       sensibilite: float = 1.0) -> Optional[bytes]:
     """Renvoie un WAV (bytes) de la phrase prononcée, ou None si personne n'a parlé.
     Le seuil s'adapte au bruit de la pièce (mesuré pendant les 0,3 premières secondes)."""
     import sounddevice as sd
 
+    from collections import deque
+
     j = journal if journal is not None else {}
     with VERROU:
+        ANNULER.clear()
         trames, parle, silence, debut = [], False, 0.0, time.monotonic()
         calib, bruit, maxi = [], 0.0, 0.0
+        echo, fort = deque(maxlen=50), 0  # mode interruption : niveau de la voix de Jarvis captée par le micro
         with sd.InputStream(samplerate=TAUX, channels=1, blocksize=BLOC, dtype="int16") as flux:
             while True:
                 donnees, _ = flux.read(BLOC)
@@ -48,16 +55,39 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.0, duree
                 if sur_niveau:
                     sur_niveau(rms)
                 ecoule = time.monotonic() - debut
+                if ANNULER.is_set():
+                    j.update(annule=True, maxi=maxi, parle=parle)
+                    niveau_actuel["v"] = 0.0
+                    return None
+                if interruption and not parle:
+                    # Jarvis parle : on ne déclenche que si une voix dépasse nettement son propre écho
+                    echo.append(rms)
+                    ref = sorted(echo)[int(len(echo) * .9)] if len(echo) >= 10 else 1.0
+                    seuil_i = max(0.03 / max(.3, sensibilite), ref * 2.3 / max(.3, sensibilite))
+                    trames = (trames + [bytes(b)])[-12:]
+                    fort = fort + 1 if rms > seuil_i else 0
+                    if fort >= 7:  # ~210 ms de voix forte
+                        parle, bruit = True, ref
+                        if sur_debut:
+                            sur_debut()
+                    elif ecoule > attente_max:
+                        j.update(maxi=maxi, parle=False)
+                        return None
+                    continue
                 if len(calib) < 10:  # 0,3 s de calibrage
                     calib.append(rms)
                     trames.append(bytes(b))
                     bruit = sorted(calib)[len(calib) // 2]
                     continue
                 seuil = max(0.0025, bruit * 2.2)
+                if interruption:
+                    seuil = max(seuil, bruit * 1.2)
                 if not parle:
                     trames = (trames + [bytes(b)])[-12:]  # garde 360 ms avant le début de la parole
                     if rms > seuil:
                         parle = True
+                        if sur_debut:
+                            sur_debut()
                     else:
                         bruit = 0.97 * bruit + 0.03 * rms
                         if ecoule > attente_max:

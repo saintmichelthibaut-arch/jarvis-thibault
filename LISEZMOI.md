@@ -45,6 +45,8 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 
 **Choisir la voix** : `~/.jarvis/app/.venv/bin/jarvis-thibault voix` fait écouter 6 voix de majordome et enregistre celle que vous préférez.
 
+**Conversation naturelle** : après chaque réponse, Jarvis se remet à l'écoute tout seul. Parlez-lui par-dessus pour le couper (ou barre espace). « Merci » ou « c'est tout » : il se remet en veille.
+
 **Clap-clap** : même quand la fenêtre est fermée, **frappez deux fois dans vos mains** et Jarvis s'ouvre en plein écran : « À votre service, Monsieur. », puis il vous écoute : dites directement votre question. (Le micro écoute en continu : macOS affiche un point orange dans la barre des menus. Pour couper : `actif = false` dans la section `[claquement]` de `~/.jarvis/config.toml`.)
 
 **Sur l'écran :** courbe des encaissements des 14 derniers jours, compte à rebours avant le prochain rendez-vous, état de chaque module, rappels à venir.

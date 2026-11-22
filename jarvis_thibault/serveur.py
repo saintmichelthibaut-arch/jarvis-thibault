@@ -402,6 +402,53 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             log.warning("Écoute impossible : %s", exc)
             raise HTTPException(500, expliquer_erreur(exc)) from exc
 
+    @app.post("/api/ecoute_flux")
+    def api_ecoute_flux(interruption: int = 0):
+        """Écoute en continu : envoie « parole » dès que vous commencez à parler (pour couper Jarvis),
+        puis « texte » avec ce que vous avez dit, ou « rien »."""
+        import json
+        import queue
+
+        from . import ecoute
+
+        q: "queue.Queue" = queue.Queue()
+
+        def travail():
+            try:
+                j: dict = {}
+                wav = ecoute.enregistrer_phrase(
+                    attente_max=180.0 if interruption else 7.0, journal=j, interruption=bool(interruption),
+                    sur_debut=lambda: q.put({"type": "parole"}),
+                    sensibilite=float(cfg["ecoute"].get("interruption_sensibilite", 1.0) or 1.0))
+                if not j.get("annule") and j.get("maxi", 1) < 1e-4:
+                    q.put({"type": "erreur", "erreur": "macOS bloque le micro (Réglages Système → Confidentialité → Micro → Jarvis)"})
+                elif wav:
+                    q.put({"type": "texte", "texte": ecoute.transcrire(cfg, wav)})
+                else:
+                    q.put({"type": "rien"})
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Écoute impossible : %s", exc)
+                q.put({"type": "erreur", "erreur": expliquer_erreur(exc)})
+            q.put(None)
+
+        threading.Thread(target=travail, daemon=True).start()
+
+        def flux():
+            while True:
+                o = q.get()
+                if o is None:
+                    return
+                yield json.dumps(o, ensure_ascii=False) + "\n"
+
+        return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+    @app.post("/api/ecoute_stop")
+    def api_ecoute_stop():
+        from . import ecoute
+
+        ecoute.ANNULER.set()
+        return {"ok": True}
+
     @app.get("/api/niveau_micro")
     def api_niveau_micro():
         from . import ecoute

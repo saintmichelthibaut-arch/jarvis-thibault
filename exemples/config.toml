@@ -91,5 +91,8 @@ lecture_auto = false     # true : il le lit à voix haute tout seul
 actif = true             # clap-clap : ouvre Jarvis en plein écran, même fenêtre fermée
 sensibilite = 1.0        # plus haut = plus sensible (ex. 1.5) · plus bas = moins (ex. 0.7)
 
+[ecoute]
+interruption_sensibilite = 1.0   # pour couper Jarvis en parlant : plus haut = plus facile (ex. 1.5), plus bas = moins (ex. 0.7)
+
 [serveur]
 port = 8765

@@ -360,10 +360,10 @@ function parlerNavigateur(texte){const st=sousTitres(texte);st.a(0);return new P
   const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("fr"));if(v)u.voice=v;
   const t0=Date.now(),duree=Math.max(2,texte.length/14)*1000;const tm=setInterval(()=>st.a(Math.min(1,(Date.now()-t0)/duree)),250);
   u.onboundary=e=>{if(e.charIndex!=null)st.a(e.charIndex/texte.length)};
-  const fin=()=>{clearInterval(tm);st.fin();res()};u.onend=fin;u.onerror=fin;statut("parole");ORBE.forcer=.55;speechSynthesis.speak(u)}).then(()=>{ORBE.forcer=0;statut("veille")})}
+  const fin=()=>{if(finCourante===fin)finCourante=null;clearInterval(tm);st.fin();res()};finCourante=fin;u.onend=fin;u.onerror=fin;statut("parole");ORBE.forcer=.55;speechSynthesis.speak(u)}).then(()=>{ORBE.forcer=0;statut("veille")})}
 function jouer(url,texte){if(!url)return parlerNavigateur(texte);preparerAudio();
   const st=sousTitres(texte);st.a(0);
-  return new Promise(res=>{const fin=()=>{lecteur.onended=lecteur.onerror=lecteur.ontimeupdate=null;st.fin();statut("veille");res()};
+  return new Promise(res=>{const fin=()=>{if(finCourante===fin)finCourante=null;lecteur.onended=lecteur.onerror=lecteur.ontimeupdate=null;st.fin();statut("veille");res()};finCourante=fin;
     lecteur.pause();lecteur.src=url;lecteur.onended=fin;lecteur.onerror=()=>{fin();parlerNavigateur(texte)};
     lecteur.ontimeupdate=()=>{if(lecteur.duration)st.a(lecteur.currentTime/lecteur.duration)};statut("parole");
     if(ctxAudio)ctxAudio.resume().catch(()=>{});
@@ -376,20 +376,43 @@ async function lireJson(r){let j=null;try{j=await r.json()}catch(e){}if(!r.ok&&!
 async function lireFlux(rep,surLigne){const lec=rep.body.getReader(),dec=new TextDecoder();let buf="";
   for(;;){const{value,done}=await lec.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
     while((i=buf.indexOf("\n"))>=0){const l=buf.slice(0,i).trim();buf=buf.slice(i+1);if(l)try{surLigne(JSON.parse(l))}catch(e){}}}}
-async function demander(q){if(!q.trim()||occupe)return;occupe=true;afficherAide("");PANNEAUX.selon(q);transcript(q);afficher("");statut("reflexion");
-  let chaine=Promise.resolve(),fin={};
-  try{const r=await fetch("/api/parler_flux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique})});
+let conversation=false,jeton=0,finCourante=null,guetEnCours=null,ctrlParler=null;
+const MOTS_FIN=/^(merci( beaucoup)?|c'est tout|c’est tout|ça ira|ca ira|stop|rien|au revoir|bonne nuit|à plus|a plus|laisse tomber)\b/i;
+function couperVoix(){try{lecteur&&lecteur.pause()}catch(e){}try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}if(finCourante){const f=finCourante;finCourante=null;f()}}
+async function ecouteFlux(interruption,surParole){let res={texte:"",erreur:null};
+  try{const r=await fetch("/api/ecoute_flux?interruption="+(interruption?1:0),{method:"POST"});
+    await lireFlux(r,o=>{if(o.type==="parole"&&surParole)surParole();else if(o.type==="texte")res.texte=o.texte||"";else if(o.type==="erreur")res.erreur=o.erreur})}
+  catch(e){res.erreur=String(e.message||e)}return res}
+async function arreterGuet(){const g=guetEnCours;if(!g)return;guetEnCours=null;fetch("/api/ecoute_stop",{method:"POST"}).catch(()=>{});try{await g}catch(e){}}
+async function demander(q){if(!q||!q.trim())return;
+  if(occupe){jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();await arreterGuet()}
+  occupe=true;const monJeton=++jeton;afficherAide("");PANNEAUX.selon(q);transcript(q);afficher("");statut("reflexion");
+  if(MOTS_FIN.test(q.trim()))conversation=false;
+  let chaine=Promise.resolve(),fin={},interrompu=false,guet=null;
+  const surParole=()=>{if(jeton!==monJeton)return;interrompu=true;jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();
+    statut("ecoute");afficher("");transcript("je vous écoute…");suivreNiveau(true)};
+  ctrlParler=new AbortController();
+  try{const r=await fetch("/api/parler_flux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique}),signal:ctrlParler.signal});
     if(!r.ok)throw new Error("erreur "+r.status);
-    await lireFlux(r,o=>{if(o.type==="phrase"){if(o.audio)fetch(o.audio).catch(()=>{});chaine=chaine.then(()=>jouer(o.audio,o.texte))}
+    await lireFlux(r,o=>{if(jeton!==monJeton)return;
+      if(o.type==="phrase"){if(o.audio)fetch(o.audio).catch(()=>{});
+        if(!guet&&DANS_APP&&conversation)guet=guetEnCours=ecouteFlux(true,surParole);
+        chaine=chaine.then(()=>jeton===monJeton?jouer(o.audio,o.texte):null)}
       else if(o.type==="actions")charger();
       else if(o.type==="fin"){fin=o;if(o.erreur)afficherAide("Détail : "+o.erreur);if((o.actions||[]).length)charger();PANNEAUX.selon(q+" "+(o.reponse||""))}});
-    await chaine;
-    if(!fin.erreur&&fin.reponse)historique.push({role:"user",content:q},{role:"assistant",content:fin.reponse});
-    const lancer=(fin.actions||[]).find(a=>a.type==="lancer");if(lancer){occupe=false;transcript(INVITE);return briefing(lancer.quoi)}}
-  catch(e){afficher("Je crains d'avoir perdu la liaison avec le serveur, "+appellation+".");afficherAide(String(e.message||e));statut("veille")}
-  occupe=false;transcript(INVITE)}
+    await chaine}
+  catch(e){if(!interrompu&&e.name!=="AbortError"&&jeton===monJeton){afficher("Je crains d'avoir perdu la liaison avec le serveur, "+appellation+".");afficherAide(String(e.message||e))}}
+  if(!fin.erreur&&fin.reponse)historique.push({role:"user",content:q},{role:"assistant",content:fin.reponse});
+  if(interrompu){const res=guet?await guet:{texte:""};if(guetEnCours===guet)guetEnCours=null;suivreNiveau(false);occupe=false;
+    if(res.texte)return demander(res.texte);statut("veille");transcript(INVITE);return ecouterServeur(true)}
+  if(jeton!==monJeton)return;  // coupé par une autre action : c'est elle qui reprend la main
+  if(guet){guetEnCours=guet;await arreterGuet()}
+  const lancer=(fin.actions||[]).find(a=>a.type==="lancer");
+  occupe=false;transcript(INVITE);statut("veille");
+  if(lancer)return briefing(lancer.quoi);
+  if(conversation&&DANS_APP&&!fin.erreur)ecouterServeur(true)}
 $("#form").onsubmit=e=>{e.preventDefault();demander($("#q").value)};
-async function briefing(type){type=type==="bilan"?"bilan":"briefing";if(occupe)return;occupe=true;afficherAide("");statut("briefing");PANNEAUX.briefing();
+async function briefing(type){type=type==="bilan"?"bilan":"briefing";if(occupe){jeton++;couperVoix();await arreterGuet()}occupe=true;afficherAide("");statut("briefing");PANNEAUX.briefing();
   afficher((type==="bilan"?"Je prépare le bilan de la journée, ":"Je compile votre briefing, ")+appellation+"…");
   try{const b=await lireJson(await fetch("/api/"+type,{method:"POST"}));await charger();const pj=jouer(b.audio,b.texte);if(b.erreur_voix)afficherAide("Voix : "+b.erreur_voix);await pj}
   catch(e){afficher("Le briefing n'a pas pu être généré, "+appellation+".");afficherAide(String(e.message||e));statut("veille")}occupe=false}
@@ -402,18 +425,22 @@ const DANS_APP=new URLSearchParams(location.search).has("app")||!!window.pywebvi
 const MIC={niveau:0};
 let reco=null,ecoute=false,ecouteServeur=false,pollNiveau=null;
 function suivreNiveau(on){clearInterval(pollNiveau);MIC.niveau=0;if(on)pollNiveau=setInterval(async()=>{try{MIC.niveau=(await(await fetch("/api/niveau_micro")).json()).niveau}catch(e){}},110)}
-async function ecouterServeur(){if(ecouteServeur||occupe)return;ecouteServeur=true;if(lecteur&&!lecteur.paused)lecteur.pause();
-  statut("ecoute");transcript("je vous écoute…");afficher("");afficherAide("");suivreNiveau(true);$("#btnEcoute").classList.add("on");
-  try{const r=await fetch("/api/ecouter",{method:"POST"});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||"erreur "+r.status);
-    fini();if(j.texte)return demander(j.texte);statut("veille");transcript(INVITE);afficher("Je n'ai rien entendu, "+appellation+".");afficherAide("Parlez juste après le signal, un peu plus fort ou plus près du Mac.")}
-  catch(e){fini();statut("veille");afficher("Je n'entends pas le micro, "+appellation+".");afficherAide(String(e.message||e))}
-  function fini(){suivreNiveau(false);ecouteServeur=false;$("#btnEcoute").classList.remove("on")}}
+async function ecouterServeur(auto=false){if(ecouteServeur)return;if(occupe||finCourante){jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();await arreterGuet();occupe=false}
+  ecouteServeur=true;conversation=true;statut("ecoute");transcript(auto?"je vous écoute…":"je vous écoute…");if(!auto)afficher("");afficherAide("");suivreNiveau(true);$("#btnEcoute").classList.add("on");
+  const res=await ecouteFlux(false,()=>transcript("…"));
+  suivreNiveau(false);ecouteServeur=false;$("#btnEcoute").classList.remove("on");
+  if(res.erreur){conversation=false;statut("veille");afficher("Je n'entends pas le micro, "+appellation+".");afficherAide(res.erreur);return}
+  if(res.texte)return demander(res.texte);
+  conversation=false;statut("veille");transcript(INVITE);
+  if(auto)afficherAide("En veille · espace ou clap-clap pour me rappeler");else{afficher("Je n'ai rien entendu, "+appellation+".");afficherAide("Parlez juste après le signal, un peu plus fort ou plus près du Mac.")}}
 function dictee(){if(ecoute){reco.stop();return}if(lecteur&&!lecteur.paused)lecteur.pause();
   reco=new SR();reco.lang="fr-FR";reco.interimResults=true;let final="";
   reco.onstart=()=>{ecoute=true;statut("ecoute");transcript("je vous écoute…")};
   reco.onresult=e=>{let t="";for(let i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;final=t;transcript(t)};
   reco.onend=()=>{ecoute=false;final.trim()?demander(final):statut("veille")};reco.onerror=()=>{};try{reco.start()}catch(e){}}
-function micro(){(DANS_APP||!SR)?ecouterServeur():dictee()}
+function micro(){if(!(DANS_APP||!SR))return dictee();
+  if(ecouteServeur){conversation=false;fetch("/api/ecoute_stop",{method:"POST"}).catch(()=>{});return}  // 2e appui : arrêter d'écouter
+  ecouterServeur(false)}  // pendant qu'il parle : le coupe et écoute
 $("#btnEcoute").onclick=micro;
 document.addEventListener("keydown",e=>{if(e.code==="Space"&&document.activeElement!==$("#q")){e.preventDefault();micro()}});
 
@@ -436,7 +463,7 @@ function toast(e){const box=$("#toasts"),el=document.createElement("div");el.cla
 function montrerEvenement(e){
   if(e.type==="ecoute"){statut("ecoute");transcript("je vous écoute…");suivreNiveau(true);CERVEAU.eclat("raison");return}
   if(e.type==="ecoute_fin"){suivreNiveau(false);statut("veille");transcript(INVITE);return}
-  if(e.type==="commande"){suivreNiveau(false);statut("veille");demander(e.texte);return}
+  if(e.type==="commande"){suivreNiveau(false);statut("veille");conversation=true;demander(e.texte);return}
   toast(e);CERVEAU.eclat(e.region||"raison");PANNEAUX.evenement(e);
   if(["paiement","client","tache","tache_faite","memoire","rappel_prog","briefing","bilan"].includes(e.type)){clearTimeout(rechargeEnAttente);rechargeEnAttente=setTimeout(()=>charger(),1200)}
   if(e.dire){fileParole.push(e.dire);direSuivant()}}
