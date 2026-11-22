@@ -41,7 +41,9 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 
 **L'écran** : au repos, seul le cerveau est affiché. Les fenêtres (chiffres, agenda, devoirs…) apparaissent quand Jarvis en parle ou quand un événement arrive. Touche **D** ou bouton **Tableau** pour toutes les garder affichées.
 
-**Clap-clap** : même quand la fenêtre est fermée, **frappez deux fois dans vos mains** et Jarvis s'ouvre en plein écran : « À votre service, Monsieur. » (Le micro écoute en continu : macOS affiche un point orange dans la barre des menus. Pour couper : `actif = false` dans la section `[claquement]` de `~/.jarvis/config.toml`.)
+**Choisir la voix** : `~/.jarvis/app/.venv/bin/jarvis-thibault voix` fait écouter 6 voix de majordome et enregistre celle que vous préférez.
+
+**Clap-clap** : même quand la fenêtre est fermée, **frappez deux fois dans vos mains** et Jarvis s'ouvre en plein écran : « À votre service, Monsieur. », puis il vous écoute : dites directement votre question. (Le micro écoute en continu : macOS affiche un point orange dans la barre des menus. Pour couper : `actif = false` dans la section `[claquement]` de `~/.jarvis/config.toml`.)
 
 **Sur l'écran :** courbe des encaissements des 14 derniers jours, compte à rebours avant le prochain rendez-vous, état de chaque module, rappels à venir.
 

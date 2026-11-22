@@ -57,10 +57,16 @@ def main() -> int:
         fullscreen=etat["plein"],
     )
 
+    def quitter(*_):
+        # fermeture immédiate : rien à sauvegarder, Jarvis continue de veiller en arrière-plan
+        os._exit(0)
+
+    fenetre.events.closed += quitter
+
     def surveiller_reveil():
         """Double claquement pendant que l'app est ouverte : fenêtre devant, en plein écran."""
         while True:
-            time.sleep(.5)
+            time.sleep(.2)
             if not drapeau.exists():
                 continue
             drapeau.unlink(missing_ok=True)
@@ -80,7 +86,7 @@ def main() -> int:
     stockage.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("PYWEBVIEW_LOG", "warning")
     webview.start(surveiller_reveil, private_mode=False, storage_path=str(stockage))
-    return 0
+    os._exit(0)
 
 
 if __name__ == "__main__":

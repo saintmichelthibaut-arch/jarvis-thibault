@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import cerveau, voix
@@ -310,6 +311,93 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
         finally:
             etat.statut = "veille"
 
+    @app.post("/api/parler_flux")
+    def api_parler_flux(m: Message):
+        """Répond phrase par phrase : chaque phrase arrive avec sa voix dès qu'elle est prête."""
+        import json
+        from concurrent.futures import ThreadPoolExecutor
+
+        def ligne(o):
+            return json.dumps(o, ensure_ascii=False) + "\n"
+
+        def flux():
+            etat.statut = "reflexion"
+            pool = ThreadPoolExecutor(max_workers=3)
+            try:
+                sures = cerveau.intentions(m.message, cfg["moi"]["fuseau"])
+                faites = executer_actions(etat, sures)
+                if faites:
+                    yield ligne({"type": "actions", "actions": faites})
+                message = m.message
+                if faites:
+                    resume = "; ".join(f"{a.get('titre', a.get('quoi', ''))} : {a.get('texte', '')}".strip(" :") for a in faites)
+                    message += f"\n\n(Note du système : c'est DÉJÀ fait → {resume}. Confirme-le simplement, sans balise.)"
+                attente, tampon, complet, balises = [], "", "", []
+
+                def voix_de(p):
+                    if not m.voix:
+                        return None
+                    try:
+                        return _url_audio(voix.synthetiser(cfg, p))
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("Voix indisponible : %s", exc)
+                        return None
+
+                def pousser(phrases):
+                    for p in phrases:
+                        acts, p = cerveau.extraire_actions(p)
+                        balises.extend(acts)
+                        if p:
+                            attente.append((p, pool.submit(voix_de, p)))
+
+                def pretes(tout=False):
+                    while attente and (tout or attente[0][1].done()):
+                        p, f = attente.pop(0)
+                        yield ligne({"type": "phrase", "texte": p, "audio": f.result()})
+
+                try:
+                    for t in cerveau.repondre_flux(cfg, message, m.historique, etat.rafraichir()):
+                        tampon += t
+                        complet += t
+                        ph, tampon = cerveau.decouper_phrases(tampon)
+                        pousser(ph)
+                        yield from pretes()
+                except Exception as exc:  # noqa: BLE001
+                    log.exception("Cerveau indisponible")
+                    texte = f"C'est fait, {appellation(cfg)}." if faites else f"Mon cerveau ne répond pas, {appellation(cfg)}."
+                    yield ligne({"type": "phrase", "texte": texte, "audio": None})
+                    yield ligne({"type": "fin", "reponse": texte, "erreur": expliquer_erreur(exc), "actions": faites})
+                    return
+                ph, _ = cerveau.decouper_phrases(tampon, fin=True)
+                pousser(ph)
+                yield from pretes(tout=True)
+                deja = {n for n, _ in sures}
+                faites2 = executer_actions(etat, [(n, a) for n, a in balises if n not in deja])
+                _, propre = cerveau.extraire_actions(complet)
+                yield ligne({"type": "fin", "reponse": propre or f"C'est fait, {appellation(cfg)}.", "actions": faites + faites2})
+            finally:
+                pool.shutdown(wait=False)
+                etat.statut = "veille"
+
+        return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+    @app.post("/api/ecouter")
+    def api_ecouter():
+        """Écoute une phrase au micro du Mac (depuis Jarvis lui-même) et la renvoie en texte."""
+        from . import ecoute
+
+        try:
+            return {"texte": ecoute.ecouter_commande(cfg)}
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Écoute impossible : %s", exc)
+            raise HTTPException(500, expliquer_erreur(exc)) from exc
+
+    @app.get("/api/niveau_micro")
+    def api_niveau_micro():
+        from . import ecoute
+
+        return {"niveau": ecoute.niveau_actuel["v"]}
+
     @app.post("/api/dire")
     def api_dire(t: Texte):
         try:
@@ -353,6 +441,8 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
         etat.rafraichir(force=True)
         etat.ev.publier("tache", "Tâche ajoutée", t.texte, "priorites")
         return {"ok": True}
+
+    app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
     @app.get("/audio/{nom}")
     def audio(nom: str):

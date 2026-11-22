@@ -272,6 +272,72 @@ def briefing(cfg, donnees: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return {"texte": texte, "contexte": ctx, "horodatage": donnees["horodatage"]}
 
 
+def _messages_conversation(cfg, message, historique, donnees) -> List[Dict[str, str]]:
+    ctx = contexte_texte(donnees, cfg)
+    msgs = [{"role": "system", "content": persona(cfg)
+             + "\n\nDONNÉES À JOUR (ta seule source de vérité) :\n" + ctx + "\n\n" + ACTIONS
+             + "\n\nRÉPONDS VITE : commence directement par l'essentiel, première phrase courte."}]
+    for h in historique[-12:]:
+        if h.get("role") in ("user", "assistant") and h.get("content"):
+            msgs.append({"role": h["role"], "content": h["content"][:2000]})
+    msgs.append({"role": "user", "content": message})
+    return msgs
+
+
+def repondre_flux(cfg, message: str, historique: List[Dict[str, str]], donnees: Dict[str, Any]):
+    """Comme repondre(), mais renvoie le texte morceau par morceau, dès qu'il est écrit."""
+    c = cfg["cerveau"]
+    extra: Dict[str, Any] = {}
+    if c["fournisseur"] == "ollama":
+        extra["reasoning_effort"] = "none"
+    flux = _client(cfg).chat.completions.create(
+        model=c["modele"], messages=_messages_conversation(cfg, message, historique, donnees),
+        temperature=c.get("temperature", 0.7), max_tokens=500, stream=True, **extra)
+    dans_pensee = False
+    for morceau in flux:
+        if not morceau.choices:
+            continue
+        t = morceau.choices[0].delta.content or ""
+        if "<think>" in t:
+            dans_pensee = True
+        if dans_pensee:
+            if "</think>" in t:
+                dans_pensee = False
+                t = t.split("</think>", 1)[1]
+            else:
+                continue
+        if t:
+            yield t.replace("**", "").replace("#", "")
+
+
+_FIN_PHRASE = re.compile(r"(.+?[.!?…])(\s+|$)", re.S)
+
+
+def decouper_phrases(tampon: str, fin: bool = False) -> tuple[List[str], str]:
+    """Extrait les phrases complètes d'un tampon de texte (la 1re le plus tôt possible)."""
+    phrases = []
+    while True:
+        m = _FIN_PHRASE.match(tampon)
+        if not m or (not m.group(2) and not fin):
+            break
+        p = m.group(1).strip()
+        if len(p) < 18 and not fin and len(tampon) > m.end():
+            # phrase trop courte : on l'accole à la suivante
+            m2 = _FIN_PHRASE.match(tampon, m.end())
+            if not m2 or (not m2.group(2)):
+                break
+            p = tampon[:m2.end(1)].strip()
+            tampon = tampon[m2.end():]
+        else:
+            tampon = tampon[m.end():]
+        if p:
+            phrases.append(p)
+    if fin and tampon.strip():
+        phrases.append(tampon.strip())
+        tampon = ""
+    return phrases, tampon
+
+
 def repondre(cfg, message: str, historique: List[Dict[str, str]],
              donnees: Dict[str, Any]) -> str:
     ctx = contexte_texte(donnees, cfg)

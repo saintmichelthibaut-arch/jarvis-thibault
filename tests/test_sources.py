@@ -194,3 +194,35 @@ def test_double_claquement():
     assert _compter(_signal([(.5,)])) == 0                 # un seul claquement → rien
     assert _compter(_signal([(.5,), (2.2,)])) == 0         # trop espacés → rien
     assert _compter(_signal([(.5, "voix"), (1.0, "voix")])) == 0  # quelqu'un parle → rien
+
+
+def test_reponse_en_flux(tmp_path, monkeypatch):
+    """La 1re phrase doit partir avant la fin de la réponse du modèle."""
+    import json
+    import time as _t
+
+    from fastapi.testclient import TestClient
+
+    from jarvis_thibault import cerveau, config, serveur
+
+    monkeypatch.setattr(config, "DOSSIER", tmp_path)
+    cfg = config.Config(data=config._fusion(config.DEFAUTS, {"voix": {"fournisseur": "aucune"}}), dossier=tmp_path, demo=True)
+
+    def faux_flux(*a, **k):
+        for morceau in ["Bonjour Monsieur, ", "tout va bien. ", "Deuxième phrase ", "un peu plus longue."]:
+            _t.sleep(.3)
+            yield morceau
+
+    monkeypatch.setattr(cerveau, "repondre_flux", faux_flux)
+    client = TestClient(serveur.creer_app(cfg, planifier=False))
+    t0 = _t.time()
+    instants, phrases = [], []
+    with client.stream("POST", "/api/parler_flux", json={"message": "salut", "voix": False}) as r:
+        for l in r.iter_lines():
+            if l:
+                o = json.loads(l)
+                if o["type"] == "phrase":
+                    instants.append(_t.time() - t0)
+                    phrases.append(o["texte"])
+    assert phrases == ["Bonjour Monsieur, tout va bien.", "Deuxième phrase un peu plus longue."]
+    assert instants[0] < 1.0 < instants[1]

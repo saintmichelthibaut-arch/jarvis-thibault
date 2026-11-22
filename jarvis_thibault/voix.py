@@ -13,10 +13,10 @@ from openai import OpenAI
 
 
 CONSIGNES_JARVIS = (
-    "Tu es JARVIS, une intelligence artificielle majordome. Parle en français de France, avec une voix masculine "
-    "grave, calme et parfaitement posée ; diction précise et élégante, légèrement synthétique, comme un assistant "
-    "d'intelligence artificielle de film de science-fiction. Ton courtois, flegmatique, avec une pointe d'ironie "
-    "bienveillante. Rythme mesuré, petites pauses aux virgules, jamais pressé."
+    "Tu es JARVIS, intelligence artificielle et majordome numérique. Français de France, voix masculine grave, "
+    "posée et parfaitement maîtrisée, diction impeccable et précise. Ton flegmatique, courtois, légèrement "
+    "pince-sans-rire, d'un raffinement très britannique. Débit fluide et rapide mais jamais pressé. "
+    "Une légère froideur d'intelligence artificielle, jamais robotique."
 )
 
 
@@ -39,6 +39,8 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
         cle = cfg.secret("openai_api_key")
         if cle:
             sortie = dossier / f"{nom}.mp3"
+            if sortie.exists() and sortie.stat().st_size > 1000:
+                return sortie  # déjà prononcé : instantané
             args = dict(model=v.get("modele", "gpt-4o-mini-tts"), voice=v.get("voix", "onyx"),
                         input=texte[:4000], response_format="mp3")
             if "tts-1" not in args["model"]:
@@ -61,10 +63,10 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def jouer(fichier: Path) -> None:
+def jouer(fichier: Path, attendre: bool = False) -> None:
     """Joue un fichier audio sur les haut-parleurs du Mac (sans navigateur)."""
     if platform.system() == "Darwin" and shutil.which("afplay"):
-        subprocess.Popen(["afplay", str(fichier)])
+        (subprocess.run if attendre else subprocess.Popen)(["afplay", str(fichier)])
 
 
 def notifier(titre: str, message: str) -> None:

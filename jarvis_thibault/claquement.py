@@ -89,14 +89,20 @@ def reveiller(cfg, ev=None) -> None:
 
     def saluer():
         try:
-            from . import voix
+            from . import ecoute, voix
 
-            f = voix.synthetiser(cfg, f"À votre service, {appel}.", nom=f"reveil-{appel}")
+            f = voix.synthetiser(cfg, f"À votre service, {appel}.", nom=f"reveil-{appel}-v2")
             if f:
-                time.sleep(1.2)
-                voix.jouer(f)
+                voix.jouer(f, attendre=True)
+            if ev is not None and cfg["claquement"].get("ecouter_apres", True):
+                ev.publier("ecoute", "À l'écoute", "parlez maintenant", "langage")
+                texte = ecoute.ecouter_commande(cfg)
+                if texte:
+                    ev.publier("commande", "Vous", texte, "langage")
+                else:
+                    ev.publier("ecoute_fin", "Écoute", "terminée", "langage")
         except Exception as exc:  # noqa: BLE001
-            log.warning("Salutation impossible : %s", exc)
+            log.warning("Salutation / écoute impossible : %s", exc)
 
     threading.Thread(target=saluer, daemon=True).start()
 
