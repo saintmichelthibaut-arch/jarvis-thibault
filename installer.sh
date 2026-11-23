@@ -54,13 +54,14 @@ ok "Jarvis installé dans $JH"
 # ─── 3. Réglages ────────────────────────────────────────────────────
 bleu "3/7  Vos réglages"
 [[ -f "$JH/config.toml" ]] || cp "$ICI/exemples/config.toml" "$JH/config.toml"
-[[ -f "$JH/fixigo.md" ]]   || cp "$ICI/exemples/fixigo.md" "$JH/fixigo.md"
+# Une installation antérieure garde son fichier fixigo.md (Jarvis le reprend tel quel).
+[[ -f "$JH/fyxigo.md" || -f "$JH/fixigo.md" ]] || cp "$ICI/exemples/fyxigo.md" "$JH/fyxigo.md"
 RAM=$(( $(sysctl -n hw.memsize) / 1073741824 ))
 MODELE="qwen3.5:9b"; (( RAM < 16 )) && MODELE="qwen3.5:4b"
 
 read -r -p "  Votre ville pour la météo [Paris] : " VILLE; VILLE="${VILLE:-Paris}"
 read -r -p "  Heure du briefing du matin [07:00] : " HEURE; HEURE="${HEURE:-07:00}"
-read -r -p "  Objectif de MRR Fixigo en € [5000] : " OBJ; OBJ="${OBJ:-5000}"
+read -r -p "  Objectif de commission Fyxigo par mois en € [3000] : " OBJ; OBJ="${OBJ:-3000}"
 echo
 echo "  Le « cerveau » de Jarvis :"
 echo "    1) Sur ce Mac ($MODELE) — gratuit, vos chiffres ne quittent pas le Mac"
@@ -70,15 +71,21 @@ read -r -p "  Votre choix [1] : " CERV; CERV="${CERV:-1}"
 VILLE="$VILLE" HEURE="$HEURE" OBJ="$OBJ" CERV="$CERV" MODELE="$MODELE" CFG="$JH/config.toml" "$PY" -I - <<'EOF'
 import os, re
 p = os.environ["CFG"]; s = open(p, encoding="utf-8").read()
-def put(cle, val, section):
+def put(cle, val, *sections):
     global s
-    bloc = re.search(rf"(?ms)^\[{re.escape(section)}\]\n(.*?)(?=^\[|\Z)", s)
-    corps = re.sub(rf"(?m)^{cle}\s*=.*$", f"{cle} = {val}", bloc.group(1), count=1)
+    for section in sections:
+        bloc = re.search(rf"(?ms)^\[{re.escape(section)}\]\n(.*?)(?=^\[|\Z)", s)
+        if bloc:
+            break
+    if re.search(rf"(?m)^{cle}\s*=", bloc.group(1)):
+        corps = re.sub(rf"(?m)^{cle}\s*=.*$", f"{cle} = {val}", bloc.group(1), count=1)
+    else:
+        corps = f"{cle} = {val}\n" + bloc.group(1)
     s = s[:bloc.start(1)] + corps + s[bloc.end(1):]
 q = lambda v: '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
 put("ville", q(os.environ["VILLE"]), "moi")
 put("heure", q(os.environ["HEURE"]), "briefing")
-put("objectif_mrr", str(int(float(os.environ["OBJ"] or 0))), "fixigo")
+put("objectif_commission_mois", str(int(float(os.environ["OBJ"] or 0))), "fyxigo", "fixigo")
 if os.environ["CERV"] == "2":
     put("fournisseur", q("openai"), "cerveau"); put("modele", q("gpt-4.1-mini"), "cerveau")
 else:
@@ -93,7 +100,7 @@ bleu "4/7  Vos clés (rien ne s'affiche quand vous collez : c'est normal)"
 chmod 600 "$JH/secrets.toml"
 read -r -s -p "  Clé OpenAI (sk-…), Entrée pour passer : " K_OPENAI; echo
 read -r -s -p "  Clé Stripe restreinte (rk_live_…), Entrée pour passer : " K_STRIPE; echo
-read -r -s -p "  Adresse de la base Fixigo (postgresql://…), Entrée pour passer : " K_BASE; echo
+read -r -s -p "  Adresse de la base Fyxigo (postgresql://…), Entrée pour passer : " K_BASE; echo
 K_OPENAI="$K_OPENAI" K_STRIPE="$K_STRIPE" K_BASE="$K_BASE" SEC="$JH/secrets.toml" CFG="$JH/config.toml" "$PY" -I - <<'EOF'
 import os, re
 p = os.environ["SEC"]; s = open(p, encoding="utf-8").read()
@@ -105,7 +112,7 @@ for cle, env in (("openai_api_key", "K_OPENAI"), ("stripe_api_key", "K_STRIPE"),
 open(p, "w", encoding="utf-8").write(s)
 if os.environ["K_BASE"].strip():
     c = open(os.environ["CFG"], encoding="utf-8").read()
-    c = re.sub(r"(?ms)(^\[fixigo\.base\]\n.*?^active\s*=\s*)false", r"\1true", c, count=1)
+    c = re.sub(r"(?ms)(^\[f[iy]xigo\.base\]\n.*?^active\s*=\s*)false", r"\1true", c, count=1)
     open(os.environ["CFG"], "w", encoding="utf-8").write(c)
 EOF
 unset K_OPENAI K_STRIPE K_BASE
@@ -150,7 +157,7 @@ bleu "
      (ou Outlook.com) → cochez « Calendriers »
 
   Ensuite : ouvrez l'app « Jarvis » (dossier Applications de votre dossier perso).
-  Vos tâches Fixigo : $JH/fixigo.md
+  Vos tâches Fyxigo : $JH/fyxigo.md
 ════════════════════════════════════════════════════════════════════
 "
 open "$HOME/Applications" 2>/dev/null || true

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ajoute ou remplace une clé (OpenAI, Stripe, base Fixigo) sans toucher au reste.
+# Ajoute ou remplace une clé (OpenAI, Stripe, base Fyxigo) sans toucher au reste.
 set -euo pipefail
 JH="${JARVIS_HOME:-$HOME/.jarvis}"
 SEC="$JH/secrets.toml"
@@ -10,7 +10,7 @@ chmod 600 "$SEC"
 
 if [[ "$(uname)" == "Darwin" ]] && command -v osascript >/dev/null 2>&1; then
   # Petites fenêtres du Mac : marche même lancé depuis Claude Code (« ! bash … »)
-  CHOIX=$(osascript -e 'choose from list {"OpenAI (sk-…)", "Stripe (rk_live_…)", "Base Fixigo (postgresql://…)"} with title "Jarvis" with prompt "Quelle clé voulez-vous ajouter ?" default items {"OpenAI (sk-…)"}' 2>/dev/null || echo false)
+  CHOIX=$(osascript -e 'choose from list {"OpenAI (sk-…)", "Stripe (rk_live_…)", "Base Fyxigo (postgresql://…)"} with title "Jarvis" with prompt "Quelle clé voulez-vous ajouter ?" default items {"OpenAI (sk-…)"}' 2>/dev/null || echo false)
   case "$CHOIX" in
     OpenAI*) CLE=openai_api_key ;;
     Stripe*) CLE=stripe_api_key ;;
@@ -22,7 +22,7 @@ else
   echo "Quelle clé voulez-vous ajouter ?"
   echo "  1) OpenAI (sk-…)"
   echo "  2) Stripe restreinte (rk_live_…)"
-  echo "  3) Adresse de la base Fixigo (postgresql://…)"
+  echo "  3) Adresse de la base Fyxigo (postgresql://…)"
   read -r -p "Votre choix : " CHOIX
   case "$CHOIX" in
     1) CLE=openai_api_key ;;
@@ -46,7 +46,7 @@ else:
 open(p, "w", encoding="utf-8").write(s)
 if cle == "base_url":
     c = open(os.environ["CFG"], encoding="utf-8").read()
-    c = re.sub(r"(?ms)(^\[fixigo\.base\]\n.*?^active\s*=\s*)false", r"\1true", c, count=1)
+    c = re.sub(r"(?ms)(^\[f[iy]xigo\.base\]\n.*?^active\s*=\s*)false", r"\1true", c, count=1)
     open(os.environ["CFG"], "w", encoding="utf-8").write(c)
 EOF
 unset VAL

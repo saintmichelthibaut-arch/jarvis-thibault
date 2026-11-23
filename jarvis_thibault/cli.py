@@ -48,7 +48,7 @@ def main(argv=None) -> int:
     if args.cmd == "verifier":
         d = cerveau.collecter(cfg)
         for nom in cerveau.SOURCES:
-            if nom == "stripe" and not cfg["fixigo"].get("stripe") and not cfg.demo:
+            if nom == "stripe" and not cfg["fyxigo"].get("stripe") and not cfg.demo:
                 print(f"  –  {nom:8} désactivé")
             elif nom in d["erreurs"]:
                 print(f"  ✗  {nom:8} {d['erreurs'][nom]}")

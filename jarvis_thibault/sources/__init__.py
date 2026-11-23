@@ -1,1 +1,1 @@
-"""Sources de données de Jarvis (agenda, météo, Fixigo...)."""
+"""Sources de données de Jarvis (agenda, météo, Fyxigo...)."""

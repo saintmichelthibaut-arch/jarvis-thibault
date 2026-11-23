@@ -1,4 +1,4 @@
-"""Indicateurs Fixigo depuis la base de données de l'appli.
+"""Indicateurs Fyxigo depuis la base de données de l'appli.
 
 Chaque indicateur est une requête SQL (définie dans config.toml) qui renvoie
 UN nombre. Compatible PostgreSQL (Supabase, Neon, Railway, Render...), MySQL
@@ -58,7 +58,7 @@ def base(cfg) -> List[Dict[str, Any]]:
         from .demo import base_demo
 
         return base_demo()
-    b = cfg["fixigo"]["base"]
+    b = cfg["fyxigo"]["base"]
     if not b.get("active"):
         return []
     return indicateurs_base(cfg.secret("base_url"), b.get("indicateurs") or [])

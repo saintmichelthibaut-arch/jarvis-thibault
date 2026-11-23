@@ -194,13 +194,13 @@ class VeilleStripe:
 
     def tic(self) -> None:
         cfg = self.etat.cfg
-        if time.time() < self.prochaine or cfg.demo or not cfg["fixigo"].get("stripe") or not cfg.secret("stripe_api_key"):
+        if time.time() < self.prochaine or cfg.demo or not cfg["fyxigo"].get("stripe") or not cfg.secret("stripe_api_key"):
             return
         self.prochaine = time.time() + 120
-        from .sources.stripe_fixigo import nouveautes
+        from .sources.stripe_fyxigo import nouveautes
 
         try:
-            n = nouveautes(cfg.secret("stripe_api_key"), self.depuis - 5, cfg["fixigo"]["devise"])
+            n = nouveautes(cfg.secret("stripe_api_key"), self.depuis - 5, cfg["fyxigo"]["devise"])
         except Exception as exc:  # noqa: BLE001
             log.warning("Veille Stripe : %s", exc)
             return
@@ -212,8 +212,11 @@ class VeilleStripe:
             self.vus.add(p["id"])
             nouveau = True
             montant = f"{p['montant']:.2f}".replace(".00", "").replace(".", ",")
-            self.ev.publier("paiement", "Nouveau paiement", f"+{montant} €", "stripe",
-                            dire=f"Ka-tching, {appel} : {montant} euros viennent de tomber.")
+            taux = float(cfg["fyxigo"].get("taux_commission") or 0.30)
+            com = f"{p['montant'] * taux:.2f}".replace(".00", "").replace(".", ",")
+            self.ev.publier("paiement", "Intervention payée", f"+{montant} € · commission {com} €", "stripe",
+                            dire=f"Ka-tching, {appel} : une intervention de {montant} euros vient d'être payée, "
+                                 f"{com} euros de commission pour Fyxigo.")
         for p in n["echecs"]:
             if p["id"] in self.vus:
                 continue
@@ -224,8 +227,8 @@ class VeilleStripe:
                 continue
             self.vus.add(c["id"])
             nouveau = True
-            self.ev.publier("client", "Nouveau client Fixigo", "bienvenue à bord", "mrr",
-                            dire=f"{appel}, un nouveau client vient de rejoindre Fixigo.")
+            self.ev.publier("client", "Nouveau client Fyxigo", "bienvenue à bord", "commission",
+                            dire=f"{appel}, un nouveau client vient de rejoindre Fyxigo.")
         if nouveau:
             threading.Thread(target=self.etat.rafraichir, kwargs={"force": True}, daemon=True).start()
 

@@ -4,8 +4,8 @@ Un Jarvis qui parle français, vous appelle « Monsieur » (ou « Thibault » qu
 
 - **la météo** du jour (Open-Meteo, gratuit) ;
 - **votre emploi du temps** : agendas Apple (iCloud) **et Outlook**, lus dans l'app Calendrier du Mac ;
-- **les chiffres de Fixigo** : encaissements, nouveaux clients, MRR par rapport à l'objectif, paiements échoués (Stripe), et vos indicateurs maison tirés de la base de l'appli ;
-- **ce que vous devez faire pour faire avancer Fixigo** : vos tâches (en retard et urgentes d'abord) et les 3 priorités du jour.
+- **les chiffres de Fyxigo** : interventions payées, encaissements, **commission Fyxigo** (30 %) par rapport à l'objectif, panier moyen, remboursements, contestations bancaires et paiements échoués (Stripe), plus les indicateurs de l'appli tirés de la base (demandes, taux d'acceptation, artisans vérifiés, note moyenne…) ;
+- **ce que vous devez faire pour faire avancer Fyxigo** : vos tâches (en retard et urgentes d'abord) et les 3 priorités du jour.
 
 En plus du briefing, il y a un **tableau de bord plein écran** avec l'orbe animé, à laisser sur un écran ou une télé. Vous pouvez **lui parler au micro** (barre espace) ou lui écrire : « Combien on a encaissé cette semaine ? », « Qu'est-ce que j'ai cet après-midi ? », « Ajoute une tâche : appeler le comptable ».
 
@@ -17,8 +17,8 @@ Il est construit sur **OpenJarvis** et **Ollama** (l'IA tourne sur votre Mac), a
 
 **Il vous parle tout seul quand il le faut :**
 - le **briefing du matin** (7 h par défaut) et le **bilan du soir** (19 h 30) ;
-- **10 minutes avant chaque rendez-vous** : « Monsieur, la démo Fixigo commence dans 10 minutes, Lyon 3e. » ;
-- **à chaque paiement Fixigo** : « Ka-tching, Monsieur : 49 euros viennent de tomber. » Les nouveaux clients et les paiements échoués sont signalés aussi ;
+- **10 minutes avant chaque rendez-vous** : « Monsieur, le rendez-vous avec le plombier commence dans 10 minutes, Paris 11e. » ;
+- **à chaque paiement Fyxigo** : « Ka-tching, Monsieur : une intervention de 109 euros vient d'être payée, 32,70 euros de commission pour Fyxigo. » Les nouveaux clients et les paiements échoués sont signalés aussi ;
 - **vos rappels** à l'heure dite.
 
 Chaque événement apparaît en notification en haut de l'écran et fait **flasher la zone du cerveau** qui le concerne.
@@ -28,13 +28,13 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 | Vous dites | Jarvis |
 |---|---|
 | « Fais-moi le briefing » · « Fais-moi le bilan » | lit le point complet |
-| « Combien on a encaissé cette semaine ? » · « Où en est le MRR ? » | répond avec les chiffres Stripe |
+| « Combien on a encaissé cette semaine ? » · « Où en est la commission du mois ? » | répond avec les chiffres Stripe |
 | « Qu'est-ce que j'ai cet après-midi ? » | lit votre agenda |
-| « Ajoute une tâche urgente : relancer le plombier » | l'ajoute aux priorités Fixigo |
+| « Ajoute une tâche urgente : relancer le plombier » | l'ajoute aux priorités Fyxigo |
 | « J'ai fini de préparer la démo » | coche la tâche |
 | « Rappelle-moi à 15 h d'appeler le comptable » · « …dans 20 minutes de… » | programme un rappel vocal |
 | « Souviens-toi que je préfère les rendez-vous le matin » | le retient pour toujours (et s'en sert) |
-| « Qu'est-ce que je dois faire en priorité pour Fixigo ? » | vous donne un plan d'action |
+| « Qu'est-ce que je dois faire en priorité pour Fyxigo ? » | vous donne un plan d'action |
 | « Qu'est-ce que j'ai à rendre cette semaine ? » · « Fais-moi le point sur mes devoirs » | compte rendu Moodle (devoirs, échéances, cours) |
 
 **Moodle** : connectez-le une fois avec `bash ~/jarvis-thibault-main/connecter-moodle.sh` (adresse du Moodle + identifiant ; le mot de passe n'est pas gardé, seulement un jeton). Jarvis vous prévient la veille de chaque devoir à rendre.
@@ -50,7 +50,7 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 1. Dézippez le dossier `jarvis-thibault`, par exemple dans *Téléchargements*.
 2. Ouvrez **Terminal** (Cmd + Espace, tapez « Terminal »).
 3. Tapez `bash ` (avec l'espace), **glissez le fichier `installer.sh`** dans la fenêtre, puis appuyez sur **Entrée**.
-4. Répondez aux questions : ville, heure du briefing, objectif de MRR, choix du cerveau, puis vos clés.
+4. Répondez aux questions : ville, heure du briefing, objectif de commission mensuelle, choix du cerveau, puis vos clés.
 5. Faites les **2 réglages à la main** affichés à la fin (voir ci-dessous).
 6. Ouvrez l'app **Jarvis**, rangée dans le dossier *Applications* de votre dossier personnel. Jarvis démarrera ensuite tout seul à chaque ouverture de session. Au premier « Parle », macOS demande l'accès au **micro** : acceptez.
 
@@ -59,8 +59,8 @@ Chaque événement apparaît en notification en haut de l'écran et fait **flash
 | Clé | Où la trouver | Pourquoi |
 |---|---|---|
 | OpenAI `sk-…` | https://platform.openai.com/api-keys (ajoutez 5 € de crédit) | La voix réaliste, et le cerveau si vous choisissez OpenAI |
-| Stripe **restreinte** `rk_live_…` | Stripe → Développeurs → Clés API → **Créer une clé restreinte** : droits **Lecture** sur *Charges*, *Customers* et *Subscriptions* uniquement | Les chiffres de Fixigo. La clé est en lecture seule : Jarvis ne peut rien modifier |
-| Base Fixigo `postgresql://…` | Supabase : *Project Settings → Database → Connection string* (ou l'équivalent chez votre hébergeur). Idéalement, créez un utilisateur en lecture seule | Les indicateurs de l'appli (demandes, artisans, missions…) |
+| Stripe **restreinte** `rk_live_…` | Stripe → Développeurs → Clés API → **Créer une clé restreinte** : droits **Lecture** sur *Charges*, *Customers* et *Disputes* uniquement | Les chiffres de Fyxigo. La clé est en lecture seule : Jarvis ne peut rien modifier |
+| Base Fyxigo `postgresql://…` | Supabase : *Project Settings → Database → Connection string* (ou l'équivalent chez votre hébergeur). Idéalement, créez un utilisateur en lecture seule | Les indicateurs de l'appli (demandes, artisans, missions…) |
 
 Toutes les clés sont rangées dans `~/.jarvis/secrets.toml`, un fichier lisible par vous seul. Vous pouvez passer une clé avec Entrée et la remplir plus tard dans ce fichier.
 
@@ -76,7 +76,7 @@ Toutes les clés sont rangées dans `~/.jarvis/secrets.toml`, un fichier lisible
 - **Chaque matin à l'heure choisie**, Jarvis prépare le briefing, le **lit à voix haute** sur le Mac, envoie une notification et ouvre le tableau de bord. Si le Mac était éteint ou en veille, le briefing est fait au réveil, jusqu'à midi.
 - **Tableau de bord** : http://localhost:8765. Le bouton **Briefing** en génère un tout de suite, **Réécouter** relit celui du jour.
 - **Parler à Jarvis** : bouton micro ou **barre espace**. La dictée marche dans Chrome et Safari, qui vous demanderont l'accès au micro la première fois.
-- **Vos tâches Fixigo** sont dans `~/.jarvis/fixigo.md`. Vous pouvez les cocher sur le tableau de bord, ou dire « ajoute une tâche : … ».
+- **Vos tâches Fyxigo** sont dans `~/.jarvis/fyxigo.md` (une ancienne installation garde `~/.jarvis/fixigo.md`, que Jarvis reprend tel quel). Vous pouvez les cocher sur le tableau de bord, ou dire « ajoute une tâche : … ».
 
   ```
   - [ ] !!! Relancer les artisans en attente @2026-11-24
@@ -91,14 +91,15 @@ Tout se règle dans `~/.jarvis/config.toml`. Quittez puis rouvrez Jarvis après 
 - **Voix** : `voix = "onyx"`. Essayez aussi `ash`, `echo` ou `sage`. `consignes` règle le ton.
 - **Cerveau** : en `ollama`, tout reste sur le Mac, gratuitement. En `openai`, il est plus fin et plus drôle, pour quelques centimes par jour, mais vos chiffres passent par OpenAI.
   > Le cerveau local doit être assez gros. Avec un petit modèle, Jarvis peut se tromper dans les chiffres. Gardez `qwen3.5:9b` si votre Mac a 16 Go ou plus. En dessous, passez à OpenAI.
-- **Indicateurs de l'appli Fixigo** : dans la section `[fixigo.base]`, mettez `active = true` et écrivez une requête SQL par indicateur. Les exemples fournis sont à adapter aux noms de vos tables.
+- **Indicateurs de l'appli Fyxigo** : dans la section `[fyxigo.base]`, mettez `active = true`. Les 9 requêtes fournies dans `exemples/config.toml` correspondent au vrai schéma de Fyxigo (tables `intervention_requests`, `prestataires`, `avis`) et ont été testées. Si vous aviez installé Jarvis avant, copiez-les dans votre `~/.jarvis/config.toml` : l'ancienne section `[fixigo]` reste lue telle quelle.
+- **Commission** : `taux_commission = 0.30` et `objectif_commission_mois` dans la section `[fyxigo]`. Fyxigo n'a pas d'abonnement : il n'y a plus de MRR.
 
 ## Commandes utiles (Terminal)
 
 ```bash
 ~/.jarvis/app/.venv/bin/jarvis-thibault verifier      # teste chaque source et le cerveau
 ~/.jarvis/app/.venv/bin/jarvis-thibault briefing --lire
-~/.jarvis/app/.venv/bin/jarvis-thibault demander "Quel est mon MRR ?"
+~/.jarvis/app/.venv/bin/jarvis-thibault demander "Combien de commission ce mois-ci ?"
 ~/.jarvis/app/.venv/bin/jarvis-thibault --demo serveur --ouvrir   # essai avec des données fictives
 tail -f ~/.jarvis/jarvis.log                          # journal en cas de souci
 ```

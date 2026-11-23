@@ -47,12 +47,14 @@ DEFAUTS: Dict[str, Any] = {
         "source": "mac",
         "calendriers_ignores": [],
     },
-    "fixigo": {
+    "fyxigo": {
         "stripe": True,
         "devise": "EUR",
-        "objectif_mrr": 0,
+        "taux_commission": 0.30,
+        "objectif_commission_mois": 0,
+        "objectif_paiements_mois": 0,
         "objectif_clients_mois": 0,
-        "fichier_taches": "fixigo.md",
+        "fichier_taches": "fyxigo.md",
         "base": {"active": False, "indicateurs": []},
     },
     "ecran": {"forme": "cerveau", "couleurs": "video", "plein_ecran": False, "panneaux": "auto"},
@@ -96,8 +98,21 @@ class Config:
 
     @property
     def fichier_taches(self) -> Path:
-        p = Path(self.data["fixigo"]["fichier_taches"]).expanduser()
-        return p if p.is_absolute() else self.dossier / p
+        p = Path(self.data["fyxigo"]["fichier_taches"]).expanduser()
+        p = p if p.is_absolute() else self.dossier / p
+        ancien = self.dossier / "fixigo.md"
+        if not p.exists() and ancien.exists():
+            return ancien  # installation antérieure au changement de nom
+        return p
+
+
+def migrer(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Accepte l'ancienne section ``[fixigo]`` (avant le changement de nom en Fyxigo)."""
+    data = copy.deepcopy(data)
+    ancien = data.pop("fixigo", None)
+    if isinstance(ancien, dict):
+        data["fyxigo"] = _fusion(ancien, data.get("fyxigo") or {})
+    return data
 
 
 def charger(demo: bool | None = None) -> Config:
@@ -106,7 +121,7 @@ def charger(demo: bool | None = None) -> Config:
     fc = DOSSIER / "config.toml"
     fs = DOSSIER / "secrets.toml"
     if fc.exists():
-        data = tomllib.loads(fc.read_text(encoding="utf-8"))
+        data = migrer(tomllib.loads(fc.read_text(encoding="utf-8")))
     if fs.exists():
         secrets = tomllib.loads(fs.read_text(encoding="utf-8"))
     if demo is None:

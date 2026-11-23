@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from openai import OpenAI
 
-from .sources import agenda, base_fixigo, meteo, moodle, stripe_fixigo, taches
+from .sources import agenda, base_fyxigo, meteo, moodle, stripe_fyxigo, taches
 
 JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
@@ -31,8 +31,8 @@ def date_fr(dt: datetime) -> str:
 SOURCES: Dict[str, Callable] = {
     "meteo": meteo.meteo,
     "agenda": agenda.agenda,
-    "stripe": stripe_fixigo.stripe,
-    "base": base_fixigo.base,
+    "stripe": stripe_fyxigo.stripe,
+    "base": base_fyxigo.base,
     "taches": taches.taches,
     "moodle": moodle.moodle,
 }
@@ -41,7 +41,7 @@ SOURCES: Dict[str, Callable] = {
 def collecter(cfg) -> Dict[str, Any]:
     """Interroge toutes les sources en parallèle ; une source en panne n'arrête pas les autres."""
     actives = dict(SOURCES)
-    if not cfg["fixigo"].get("stripe") and not cfg.demo:
+    if not cfg["fyxigo"].get("stripe") and not cfg.demo:
         actives.pop("stripe")
     if not cfg["moodle"].get("actif") and not cfg.demo:
         actives.pop("moodle")
@@ -70,8 +70,9 @@ def collecter(cfg) -> Dict[str, Any]:
     except Exception:  # noqa: BLE001
         out["memoire"], out["rappels"] = [], []
     out["objectifs_chiffres"] = {
-        "mrr": cfg["fixigo"].get("objectif_mrr") or 0,
-        "clients_mois": cfg["fixigo"].get("objectif_clients_mois") or 0,
+        "commission_mois": cfg["fyxigo"].get("objectif_commission_mois") or 0,
+        "paiements_mois": cfg["fyxigo"].get("objectif_paiements_mois") or 0,
+        "clients_mois": cfg["fyxigo"].get("objectif_clients_mois") or 0,
     }
     return out
 
@@ -119,26 +120,40 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
     if s:
         dv = s["devise"]
         o = d["objectifs_chiffres"]
-        L.append("FIXIGO — STRIPE :")
-        L.append(f"  - Hier : {_eur(s['ca_hier'], dv)} encaissés, {s['nouveaux_clients_hier']} nouveaux clients.")
-        L.append(f"  - 7 derniers jours : {_eur(s['ca_7j'], dv)}, {s['nouveaux_clients_7j']} nouveaux clients.")
+        taux = s.get("taux_commission") or 0.30
+        L.append(f"FYXIGO — STRIPE (place de marché : le client paie l'intervention, Fyxigo garde "
+                 f"{taux * 100:.0f} % de commission et reverse le reste à l'artisan ; pas d'abonnement) :")
+        L.append(f"  - Hier : {s['paiements_hier']} interventions payées, {_eur(s['ca_hier'], dv)} encaissés, "
+                 f"dont {_eur(s['commission_hier'], dv)} de commission Fyxigo.")
+        L.append(f"  - 7 derniers jours : {s['paiements_7j']} interventions payées, {_eur(s['ca_7j'], dv)} encaissés, "
+                 f"{_eur(s['commission_7j'], dv)} de commission.")
         comp = ""
         if s.get("ca_mois_prec_meme_periode"):
             var = (s["ca_mois"] / s["ca_mois_prec_meme_periode"] - 1) * 100
             comp = f" ({var:+.0f} % vs même période le mois dernier)"
-        L.append(f"  - Mois en cours : {_eur(s['ca_mois'], dv)}{comp}, {s['nouveaux_clients_mois']} nouveaux clients.")
-        mrr = f"  - MRR : {_eur(s['mrr'], dv)} ({s['abonnements_actifs']} abonnements actifs, {s['essais_en_cours']} essais en cours)"
-        if o["mrr"]:
-            mrr += f", objectif {_eur(o['mrr'], dv)} soit {s['mrr'] / o['mrr'] * 100:.0f} % atteint"
-        L.append(mrr + ".")
-        if o["clients_mois"]:
+        L.append(f"  - Mois en cours : {s['paiements_mois']} interventions payées, {_eur(s['ca_mois'], dv)} encaissés{comp}, "
+                 f"panier moyen {_eur(s['panier_moyen_mois'], dv)}.")
+        com = f"  - Commission Fyxigo du mois : {_eur(s['commission_mois'], dv)}"
+        if o.get("commission_mois"):
+            com += (f", objectif {_eur(o['commission_mois'], dv)} soit "
+                    f"{s['commission_mois'] / o['commission_mois'] * 100:.0f} % atteint")
+        L.append(com + ".")
+        if o.get("paiements_mois"):
+            L.append(f"  - Objectif interventions payées ce mois : {o['paiements_mois']} ({s['paiements_mois']} atteintes).")
+        L.append(f"  - Nouveaux clients Stripe : {s['nouveaux_clients_hier']} hier, {s['nouveaux_clients_7j']} sur 7 jours, "
+                 f"{s['nouveaux_clients_mois']} ce mois.")
+        if o.get("clients_mois"):
             L.append(f"  - Objectif nouveaux clients ce mois : {o['clients_mois']} ({s['nouveaux_clients_mois']} atteints).")
+        if s.get("remboursements_7j"):
+            L.append(f"  - Remboursements sur 7 jours : {s['remboursements_7j']} pour {_eur(s['rembourse_7j'], dv)}.")
+        if s.get("litiges_ouverts"):
+            L.append(f"  - ALERTE : {s['litiges_ouverts']} contestation(s) bancaire(s) ouverte(s) à traiter dans Stripe.")
         if s["paiements_echoues_7j"]:
             L.append(f"  - Attention : {s['paiements_echoues_7j']} paiements échoués sur 7 jours.")
 
     b = d.get("base")
     if b:
-        L.append("FIXIGO — APPLI :")
+        L.append("FYXIGO — APPLI :")
         for i in b:
             if i.get("valeur") is not None:
                 L.append(f"  - {i['nom']} : {i['valeur']}")
@@ -146,10 +161,10 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
     t = d.get("taches")
     if t:
         if t["objectifs"]:
-            L.append("OBJECTIFS FIXIGO : " + " ; ".join(t["objectifs"]))
+            L.append("OBJECTIFS FYXIGO : " + " ; ".join(t["objectifs"]))
         ouvertes = [x for x in t["taches"] if not x["fait"]]
         if ouvertes:
-            L.append(f"TÂCHES FIXIGO OUVERTES ({len(ouvertes)}), par ordre d'urgence :")
+            L.append(f"TÂCHES FYXIGO OUVERTES ({len(ouvertes)}), par ordre d'urgence :")
             for x in ouvertes[:8]:
                 tags = []
                 if x["en_retard"]:
@@ -179,7 +194,7 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
                 f"{c['nom']}" + (f" ({c['progression']:.0f} %)" if isinstance(c.get("progression"), (int, float)) else "")
                 for c in mo["cours"][:8]))
     if s and s.get("ca_jours"):
-        L.append("FIXIGO — ENCAISSEMENTS PAR JOUR (14 j) : " + ", ".join(
+        L.append("FYXIGO — ENCAISSEMENTS PAR JOUR (14 j) : " + ", ".join(
             f"{x['jour'][8:10]}/{x['jour'][5:7]} {x['montant']:.0f} €" for x in s["ca_jours"]))
     if d.get("rappels"):
         L.append("RAPPELS PROGRAMMÉS : " + " ; ".join(f"{r['quand'][11:16]} {r['texte']}" for r in d["rappels"]))
@@ -206,7 +221,7 @@ def persona(cfg) -> str:
 QUI TU ES
 - Un majordome numérique loyal, brillant et calme, façon Jarvis d'Iron Man : efficace, élégant, toujours un coup d'avance.
 - Tu as une pointe d'humour : pince-sans-rire, ironie bienveillante, une petite touche par réponse, jamais lourde ni forcée.
-- Tu es aussi le bras droit de {moi['prenom']} pour FIXIGO, l'entreprise qu'il développe : tu suis les chiffres, tu rappelles les priorités, tu le pousses à avancer et tu oses lui dire franchement quand quelque chose cloche.
+- Tu es aussi le bras droit de {moi['prenom']} pour FYXIGO, l'entreprise qu'il développe : une appli de dépannage à domicile à Paris (serrurier, plombier, électricien, chauffagiste), au prix affiché, payée à la fin. Fyxigo vit d'une commission sur chaque intervention, pas d'abonnements. Tu suis les chiffres, tu rappelles les priorités, tu le pousses à avancer et tu oses lui dire franchement quand quelque chose cloche.
 
 COMMENT TU T'ADRESSES À LUI
 - Tu le vouvoies et tu l'appelles « {principal} » la plupart du temps{', et parfois ' + autres + ' quand le ton est plus complice' if autres else ''}.
@@ -224,8 +239,8 @@ def _consigne_briefing(cfg) -> str:
 1. Salutation avec l'appellation et la date du jour, une petite touche d'humour (liée à la météo ou à la journée).
 2. La météo en deux phrases, avec un conseil pratique (parapluie, manteau...).
 3. L'agenda du jour : les rendez-vous dans l'ordre avec l'heure ; signale les journées chargées ou les trous utiles. Mentionne demain s'il y a quelque chose d'important.
-4. Fixigo, les chiffres : hier, les 7 derniers jours, le mois et le MRR par rapport à l'objectif. Dis clairement si c'est bon ou s'il faut accélérer.
-5. Fixigo, l'action : les 3 priorités du jour, tirées des tâches (en retard et échéances d'abord) et de ce que révèlent les chiffres. Sois concret.
+4. Fyxigo, les chiffres : interventions payées et commission d'hier, des 7 derniers jours et du mois, par rapport à l'objectif. Signale les remboursements et les contestations s'il y en a. Dis clairement si c'est bon ou s'il faut accélérer.
+5. Fyxigo, l'action : les 3 priorités du jour, tirées des tâches (en retard et échéances d'abord) et de ce que révèlent les chiffres. Sois concret.
 6. Si des devoirs Moodle sont fournis : ceux à rendre dans les prochains jours, avec la date, le plus urgent d'abord.
 7. Une phrase de conclusion motivante et légèrement drôle.
 Uniquement les données fournies. Pas de markdown, pas de listes : du texte parlé fluide en paragraphes."""
@@ -285,7 +300,7 @@ def repondre(cfg, message: str, historique: List[Dict[str, str]],
 
 
 ACTIONS = """TES POUVOIRS — quand on te le demande, ajoute la ou les balises correspondantes AU DÉBUT de ta réponse, puis confirme naturellement :
-- [AJOUT_TACHE: texte]  → ajoute une tâche Fixigo (mets « !!! » devant le texte si c'est urgent, « @AAAA-MM-JJ » à la fin pour une échéance)
+- [AJOUT_TACHE: texte]  → ajoute une tâche Fyxigo (mets « !!! » devant le texte si c'est urgent, « @AAAA-MM-JJ » à la fin pour une échéance)
 - [TACHE_FAITE: mots-clés]  → coche une tâche terminée (« j'ai fini / c'est fait … »)
 - [MEMOIRE: fait à retenir]  → retient une information durable (« souviens-toi que… », préférences, personnes, objectifs)
 - [OUBLIE: mots-clés]  → efface un souvenir
@@ -331,7 +346,7 @@ def intentions(message: str, fuseau: str = "Europe/Paris") -> List[tuple[str, st
     if m and not acts:
         acts.append(("OUBLIE", t[m.start(1):].strip(" .!")))
     # Tâches
-    m = re.search(r"ajoute(?:r)?\s+(?:une\s+|la\s+)?t[aâ]che\s*(?:fixigo)?\s*[:,]?\s*(?:de |d'|d’|pour |:)?\s*(.+)", bas)
+    m = re.search(r"ajoute(?:r)?\s+(?:une\s+|la\s+)?t[aâ]che\s*(?:f[iy]xigo)?\s*[:,]?\s*(?:de |d'|d’|pour |:)?\s*(.+)", bas)
     if m:
         urgent = "urgent" in bas or "important" in bas
         texte = re.sub(r"^(?:urgente?|importante?)\s*[:,]?\s*", "", t[m.start(1):].strip(" .!"), flags=re.I)
@@ -350,7 +365,7 @@ def intentions(message: str, fuseau: str = "Europe/Paris") -> List[tuple[str, st
 def _consigne_bilan() -> str:
     return """Rédige le BILAN DU SOIR, à lire à voix haute (45 secondes, 100 à 160 mots) :
 1. Un mot pour clôturer la journée, avec humour léger.
-2. Fixigo aujourd'hui : ce qui a été encaissé et les nouveaux clients du jour s'ils sont fournis, la tendance des 14 derniers jours.
+2. Fyxigo aujourd'hui : les interventions payées, l'encaissé et la commission du jour s'ils sont fournis, la tendance des 14 derniers jours.
 3. Les tâches : ce qui reste ouvert et ce qu'il faudra attaquer en premier demain.
 4. Demain dans l'agenda, s'il y a quelque chose.
 5. Une phrase pour finir la soirée (repos, sport, famille…).

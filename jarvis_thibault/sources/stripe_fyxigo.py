@@ -1,7 +1,11 @@
-"""Chiffres Fixigo depuis Stripe (lecture seule).
+"""Chiffres Fyxigo depuis Stripe (lecture seule).
+
+Fyxigo est une place de marché : le client paie l'intervention, Fyxigo garde
+une commission (30 % par défaut, ``taux_commission`` dans config.toml) et
+reverse le reste à l'artisan. Il n'y a pas d'abonnement, donc pas de MRR.
 
 Utilisez une **clé restreinte** (rk_live_...) avec uniquement les droits de
-lecture : Charges, Customers, Subscriptions (Stripe → Développeurs → Clés API →
+lecture : Charges, Customers, Disputes (Stripe → Développeurs → Clés API →
 Créer une clé restreinte).
 """
 
@@ -25,10 +29,8 @@ def _unites(montant: int, devise: str) -> float:
     return montant if devise.lower() in _SANS_DECIMALES else montant / 100
 
 
-def mensualiser(montant: float, intervalle: str, nb: int) -> float:
-    nb = max(int(nb or 1), 1)
-    facteur = {"day": 365 / 12, "week": 52 / 12, "month": 1, "year": 1 / 12}.get(intervalle, 1)
-    return montant * facteur / nb
+# Litiges (contestations bancaires) encore ouverts.
+_LITIGES_OUVERTS = {"needs_response", "warning_needs_response", "under_review", "warning_under_review"}
 
 
 class Stripe:
@@ -53,6 +55,7 @@ class Stripe:
 
 
 def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
+                    taux_commission: float = 0.30,
                     maintenant: Optional[datetime] = None,
                     transport: Optional[httpx.BaseTransport] = None) -> Dict[str, Any]:
     tz = ZoneInfo(fuseau)
@@ -69,6 +72,8 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
     il_y_a_14j = jour - timedelta(days=13)
     depuis = min(il_y_a_14j, debut_mois_prec)
     ca = Counter()
+    nb = Counter()
+    rembourse = Counter()
     par_jour: Counter = Counter()
     derniers = []
     echecs_7j = 0
@@ -83,20 +88,28 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
         if ch.get("status") != "succeeded" or not ch.get("paid"):
             continue
         net = _unites(ch["amount"] - ch.get("amount_refunded", 0), devise)
+        rembourse_ch = _unites(ch.get("amount_refunded", 0), devise)
         if quand >= il_y_a_14j:
             par_jour[quand.date().isoformat()] += net
         derniers.append((ch["created"], net))
+        periodes = []
         if quand >= jour:
-            ca["aujourdhui"] += net
+            periodes.append("aujourdhui")
         elif quand >= hier:
-            ca["hier"] += net
+            periodes.append("hier")
         if il_y_a_7j <= quand < jour:
-            ca["7j"] += net
+            periodes.append("7j")
         if quand >= debut_mois:
-            ca["mois"] += net
+            periodes.append("mois")
         elif quand >= debut_mois_prec and quand.day <= now.day:
             # même période le mois dernier, pour comparer
-            ca["mois_prec_meme_periode"] += net
+            periodes.append("mois_prec_meme_periode")
+        for p in periodes:
+            ca[p] += net
+            nb[p] += 1
+            if rembourse_ch:
+                rembourse[p] += rembourse_ch
+                rembourse["nb_" + p] += 1
 
     # --- Nouveaux clients ---
     clients = Counter()
@@ -111,24 +124,20 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
         if quand >= debut_mois:
             clients["mois"] += 1
 
-    # --- MRR (abonnements actifs, hors remises) ---
-    mrr = 0.0
-    actifs = 0
-    for sub in s.lister("/subscriptions", {"status": "active"}):
-        actifs += 1
-        for it in (sub.get("items") or {}).get("data", []):
-            prix = it.get("price") or it.get("plan") or {}
-            rec = prix.get("recurring") or {
-                "interval": prix.get("interval"), "interval_count": prix.get("interval_count")
-            }
-            if (prix.get("currency") or "").lower() != devise:
-                continue
-            unitaire = prix.get("unit_amount")
-            if unitaire is None:
-                unitaire = float(prix.get("unit_amount_decimal") or prix.get("amount") or 0)
-            montant = _unites(unitaire, devise) * (it.get("quantity") or 1)
-            mrr += mensualiser(montant, rec.get("interval") or "month", rec.get("interval_count") or 1)
-    essais = sum(1 for _ in s.lister("/subscriptions", {"status": "trialing"}))
+    # --- Litiges (contestations bancaires) ---
+    # Optionnel : si la clé n'a pas le droit de lecture « Disputes », on l'indique sans planter.
+    litiges_ouverts: Optional[int] = None
+    litiges_mois: Optional[int] = None
+    try:
+        ouverts = mois = 0
+        for di in s.lister("/disputes", {"created[gte]": int((jour - timedelta(days=120)).timestamp())}):
+            if di.get("status") in _LITIGES_OUVERTS:
+                ouverts += 1
+            if datetime.fromtimestamp(di["created"], tz) >= debut_mois:
+                mois += 1
+        litiges_ouverts, litiges_mois = ouverts, mois
+    except (PermissionError, httpx.HTTPStatusError):
+        pass
 
     r2 = lambda x: round(x, 2)  # noqa: E731
     jours = [(il_y_a_14j + timedelta(days=i)).date().isoformat() for i in range(14)]
@@ -144,9 +153,19 @@ def chiffres_stripe(cle: str, fuseau: str, devise: str = "EUR",
         "nouveaux_clients_hier": clients["hier"],
         "nouveaux_clients_7j": clients["7j"],
         "nouveaux_clients_mois": clients["mois"],
-        "mrr": r2(mrr),
-        "abonnements_actifs": actifs,
-        "essais_en_cours": essais,
+        "taux_commission": taux_commission,
+        "commission_hier": r2(ca["hier"] * taux_commission),
+        "commission_7j": r2(ca["7j"] * taux_commission),
+        "commission_mois": r2(ca["mois"] * taux_commission),
+        "paiements_hier": nb["hier"],
+        "paiements_7j": nb["7j"],
+        "paiements_mois": nb["mois"],
+        "panier_moyen_mois": r2(ca["mois"] / nb["mois"]) if nb["mois"] else 0.0,
+        "rembourse_7j": r2(rembourse["7j"]),
+        "remboursements_7j": rembourse["nb_7j"],
+        "rembourse_mois": r2(rembourse["mois"]),
+        "litiges_ouverts": litiges_ouverts,
+        "litiges_mois": litiges_mois,
         "paiements_echoues_7j": echecs_7j,
         "ca_jours": [{"jour": j, "montant": r2(par_jour[j])} for j in jours],
         "derniers_paiements": [{"quand": datetime.fromtimestamp(t, tz).isoformat(timespec="minutes"), "montant": r2(m)}
@@ -178,4 +197,5 @@ def stripe(cfg) -> Dict[str, Any]:
 
         return stripe_demo()
     return chiffres_stripe(cfg.secret("stripe_api_key"), cfg["moi"]["fuseau"],
-                           cfg["fixigo"]["devise"])
+                           cfg["fyxigo"]["devise"],
+                           float(cfg["fyxigo"].get("taux_commission") or 0.30))

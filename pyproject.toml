@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "jarvis-thibault"
 version = "1.0.0"
-description = "Jarvis personnel de Thibault : briefing du matin, agenda, météo, Fixigo."
+description = "Jarvis personnel de Thibault : briefing du matin, agenda, météo, Fyxigo."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",

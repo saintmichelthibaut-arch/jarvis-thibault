@@ -43,36 +43,74 @@ calendriers_ignores = []                   # ex. ["Anniversaires", "Jours féri�
 actif = false
 url = ""
 
-[fixigo]
+[fyxigo]
+# Fyxigo est une place de marché : le client paie l'intervention, Fyxigo garde
+# une commission et reverse le reste à l'artisan. Pas d'abonnement, donc pas de MRR.
 stripe = true
 devise = "EUR"
-objectif_mrr = 5000                        # objectif de revenu mensuel récurrent (€)
-objectif_clients_mois = 40                 # objectif de nouveaux clients par mois
-fichier_taches = "fixigo.md"               # vos objectifs et tâches (~/.jarvis/fixigo.md)
+taux_commission = 0.30                     # part gardée par Fyxigo (30 %)
+objectif_commission_mois = 3000            # commission Fyxigo visée par mois (€)
+objectif_paiements_mois = 0                # interventions payées visées par mois (0 = pas d'objectif)
+objectif_clients_mois = 0                  # nouveaux clients visés par mois (0 = pas d'objectif)
+fichier_taches = "fyxigo.md"               # vos objectifs et tâches (~/.jarvis/fyxigo.md)
 
-[fixigo.base]
-# Chiffres tirés de la base de données de l'appli Fixigo.
-# L'adresse de connexion se met dans secrets.toml (base_url).
+[fyxigo.base]
+# Chiffres tirés de la base Supabase de l'appli Fyxigo (projet « illico »).
+# L'adresse de connexion se met dans secrets.toml (base_url), idéalement avec
+# un utilisateur en lecture seule.
 # Chaque indicateur = une requête SQL qui renvoie UN nombre.
 # panneau = "hier" (panneau de droite) ou "semaine" (panneau de gauche)
 # format  = "nombre", "euros", "pourcent" ou "note"
+# Ces requêtes correspondent au vrai schéma de Fyxigo (tables
+# intervention_requests, prestataires, avis) et ont été testées.
 active = false
 
-# ↓ Exemples à adapter aux noms de VOS tables (PostgreSQL / Supabase) ↓
-[[fixigo.base.indicateurs]]
+[[fyxigo.base.indicateurs]]
 nom = "Demandes d'intervention hier"
-sql = "SELECT count(*) FROM demandes WHERE created_at >= current_date - 1 AND created_at < current_date"
+sql = "SELECT count(*) FROM intervention_requests WHERE created_at >= (date_trunc('day', now() AT TIME ZONE 'Europe/Paris') - interval '1 day') AT TIME ZONE 'Europe/Paris' AND created_at < date_trunc('day', now() AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris'"
 panneau = "hier"
 
-[[fixigo.base.indicateurs]]
-nom = "Artisans inscrits hier"
-sql = "SELECT count(*) FROM artisans WHERE created_at >= current_date - 1 AND created_at < current_date"
+[[fyxigo.base.indicateurs]]
+nom = "Interventions terminées hier"
+sql = "SELECT count(*) FROM intervention_requests WHERE terminee_le >= (date_trunc('day', now() AT TIME ZONE 'Europe/Paris') - interval '1 day') AT TIME ZONE 'Europe/Paris' AND terminee_le < date_trunc('day', now() AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris'"
 panneau = "hier"
 
-[[fixigo.base.indicateurs]]
-nom = "Missions terminées (7 j)"
-sql = "SELECT count(*) FROM missions WHERE statut = 'terminee' AND updated_at >= current_date - 7"
+[[fyxigo.base.indicateurs]]
+nom = "Demandes sans artisan (7 j)"
+sql = "SELECT count(*) FROM intervention_requests WHERE status = 'annulee' AND prestataire_id IS NULL AND created_at >= now() - interval '7 days'"
+panneau = "hier"
+
+[[fyxigo.base.indicateurs]]
+nom = "Signalements clients en attente"
+sql = "SELECT count(*) FROM intervention_requests WHERE signale_le IS NOT NULL AND payment_status NOT IN ('redistribue', 'rembourse')"
+panneau = "hier"
+
+[[fyxigo.base.indicateurs]]
+nom = "Taux d'acceptation (7 j)"
+sql = "SELECT round(100.0 * count(acceptee_le) / nullif(count(*), 0)) FROM intervention_requests WHERE created_at >= now() - interval '7 days'"
 panneau = "semaine"
+format = "pourcent"
+
+[[fyxigo.base.indicateurs]]
+nom = "Délai médian d'acceptation, min (7 j)"
+sql = "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM acceptee_le - created_at) / 60) FROM intervention_requests WHERE acceptee_le IS NOT NULL AND created_at >= now() - interval '7 days'"
+panneau = "semaine"
+
+[[fyxigo.base.indicateurs]]
+nom = "Artisans vérifiés"
+sql = "SELECT count(*) FROM prestataires WHERE statut_verification = 'verifie'"
+panneau = "semaine"
+
+[[fyxigo.base.indicateurs]]
+nom = "Dossiers d'artisans à vérifier"
+sql = "SELECT count(*) FROM prestataires WHERE statut_verification = 'en_attente'"
+panneau = "semaine"
+
+[[fyxigo.base.indicateurs]]
+nom = "Note moyenne clients"
+sql = "SELECT avg(note) FROM avis"
+panneau = "semaine"
+format = "note"
 
 [ecran]
 forme = "cerveau"        # "cerveau" (comme la vidéo) ou "sphere" (sphère de particules)

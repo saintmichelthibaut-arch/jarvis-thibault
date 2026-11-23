@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from jarvis_thibault.sources import stripe_fixigo, taches
+from jarvis_thibault.sources import stripe_fyxigo, taches
 
 TZ = ZoneInfo("Europe/Paris")
 NOW = datetime(2026, 11, 20, 8, 0, tzinfo=TZ)
@@ -22,20 +22,22 @@ CHARGES = [
     {"id": "ch6", "created": ts(19), "currency": "usd", "status": "succeeded", "paid": True, "amount": 99999, "amount_refunded": 0},
 ]
 CUSTOMERS = [{"id": "c1", "created": ts(19)}, {"id": "c2", "created": ts(17)}, {"id": "c3", "created": ts(3)}]
-SUBS = [
-    {"id": "s1", "items": {"data": [{"quantity": 1, "price": {"currency": "eur", "unit_amount": 2900, "recurring": {"interval": "month", "interval_count": 1}}}]}},
-    {"id": "s2", "items": {"data": [{"quantity": 2, "price": {"currency": "eur", "unit_amount": 24000, "recurring": {"interval": "year", "interval_count": 1}}}]}},
+DISPUTES = [
+    {"id": "dp1", "created": ts(18), "status": "needs_response"},
+    {"id": "dp2", "created": ts(10), "status": "won"},
 ]
 
 
-def _handler(req: httpx.Request) -> httpx.Response:
+def _handler(req: httpx.Request, litiges_autorises: bool = True) -> httpx.Response:
     p = req.url.path
     if p.endswith("/charges"):
         data = CHARGES
     elif p.endswith("/customers"):
         data = CUSTOMERS
-    elif p.endswith("/subscriptions"):
-        data = SUBS if req.url.params.get("status") == "active" else [{"id": "t1"}]
+    elif p.endswith("/disputes"):
+        if not litiges_autorises:
+            return httpx.Response(403, json={"error": {"message": "permission"}})
+        data = DISPUTES
     else:
         return httpx.Response(404)
     # pagination : 2 objets par page
@@ -47,7 +49,7 @@ def _handler(req: httpx.Request) -> httpx.Response:
 
 
 def test_chiffres_stripe():
-    r = stripe_fixigo.chiffres_stripe("rk_test", "Europe/Paris", "EUR", maintenant=NOW,
+    r = stripe_fyxigo.chiffres_stripe("rk_test", "Europe/Paris", "EUR", maintenant=NOW,
                                       transport=httpx.MockTransport(_handler))
     assert r["ca_hier"] == 70.0            # 50 + (30 - 10)
     assert r["ca_7j"] == 170.0             # + 100 le 15
@@ -56,18 +58,53 @@ def test_chiffres_stripe():
     assert r["nouveaux_clients_hier"] == 1
     assert r["nouveaux_clients_7j"] == 2
     assert r["nouveaux_clients_mois"] == 3
-    assert r["mrr"] == 69.0                # 29 + 2*240/12
-    assert r["abonnements_actifs"] == 2
-    assert r["essais_en_cours"] == 1
+    # Place de marché : commission de 30 % sur l'encaissé net, pas de MRR
+    assert "mrr" not in r
+    assert r["paiements_hier"] == 2
+    assert r["paiements_7j"] == 3
+    assert r["paiements_mois"] == 4
+    assert r["commission_hier"] == 21.0    # 30 % de 70
+    assert r["commission_7j"] == 51.0
+    assert r["commission_mois"] == 72.0
+    assert r["panier_moyen_mois"] == 60.0  # 240 / 4
+    assert r["rembourse_7j"] == 10.0
+    assert r["remboursements_7j"] == 1
+    assert r["litiges_ouverts"] == 1
+    assert r["litiges_mois"] == 2
+
+
+def test_chiffres_stripe_taux_et_litiges_sans_droit():
+    r = stripe_fyxigo.chiffres_stripe(
+        "rk_test", "Europe/Paris", "EUR", taux_commission=0.25, maintenant=NOW,
+        transport=httpx.MockTransport(lambda req: _handler(req, litiges_autorises=False)))
+    assert r["commission_mois"] == 60.0    # 25 % de 240
+    assert r["litiges_ouverts"] is None    # clé sans le droit « Disputes » : on n'invente pas
+
+
+def test_migration_ancienne_section(tmp_path):
+    from jarvis_thibault.config import DEFAUTS, Config, _fusion, migrer
+
+    ancien = {"fixigo": {"stripe": False, "objectif_mrr": 5000, "base": {"active": True}}}
+    data = _fusion(DEFAUTS, migrer(ancien))
+    assert "fixigo" not in data
+    assert data["fyxigo"]["stripe"] is False
+    assert data["fyxigo"]["base"]["active"] is True
+    assert data["fyxigo"]["taux_commission"] == 0.30
+    # L'ancien fichier de tâches est repris s'il est le seul présent
+    (tmp_path / "fixigo.md").write_text("# À faire\n", encoding="utf-8")
+    cfg = Config(data=data, dossier=tmp_path)
+    assert cfg.fichier_taches == tmp_path / "fixigo.md"
+    (tmp_path / "fyxigo.md").write_text("# À faire\n", encoding="utf-8")
+    assert cfg.fichier_taches == tmp_path / "fyxigo.md"
 
 
 def test_taches(tmp_path):
-    f = tmp_path / "fixigo.md"
-    f.write_text("# Objectifs\n- 5000 € MRR\n\n# À faire\n- [ ] Tâche simple\n"
+    f = tmp_path / "fyxigo.md"
+    f.write_text("# Objectifs\n- 3000 € de commission\n\n# À faire\n- [ ] Tâche simple\n"
                  "- [ ] !!! Urgente @2026-11-19\n- [x] Finie\n- [ ] !! Aujourd'hui @2026-11-20\n",
                  encoding="utf-8")
     d = taches.lire(f, date(2026, 11, 20))
-    assert d["objectifs"] == ["5000 € MRR"]
+    assert d["objectifs"] == ["3000 € de commission"]
     textes = [t["texte"] for t in d["taches"]]
     assert textes == ["Urgente", "Aujourd'hui", "Tâche simple", "Finie"]
     assert d["taches"][0]["en_retard"] and d["taches"][0]["priorite"] == 3
@@ -78,15 +115,10 @@ def test_taches(tmp_path):
     assert "# À faire\n- [ ] Nouvelle" in f.read_text(encoding="utf-8")
 
 
-def test_mensualiser():
-    assert stripe_fixigo.mensualiser(120, "year", 1) == 10
-    assert stripe_fixigo.mensualiser(30, "month", 3) == 10
-
-
 def test_base_sqlite(tmp_path):
     import sqlite3
 
-    from jarvis_thibault.sources.base_fixigo import indicateurs_base
+    from jarvis_thibault.sources.base_fyxigo import indicateurs_base
 
     db = tmp_path / "app.db"
     c = sqlite3.connect(db)

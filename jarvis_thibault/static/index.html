@@ -163,12 +163,12 @@ button.b:hover,button.b.on{border-color:var(--bord-fort);color:#fff;background:r
 
 <section class="colonne g">
   <div class="pan" id="p-semaine"><h2><span>7 derniers jours</span><span>01/07</span></h2><div id="semaine"></div></div>
-  <div class="pan" id="p-hier"><h2><span>Hier · Fixigo</span><span id="hierDate"></span></h2><div id="hier"></div></div>
+  <div class="pan" id="p-hier"><h2><span>Hier · Fyxigo</span><span id="hierDate"></span></h2><div id="hier"></div></div>
   <div class="pan" id="p-moodle"><h2><span>Moodle · à rendre</span><span id="nbDevoirs"></span></h2><div id="moodle"></div></div>
 </section>
 <section class="colonne d">
   <div class="pan" id="p-agenda"><h2><span>Aujourd'hui · agenda</span><span id="nbEvt"></span></h2><div id="agenda"></div></div>
-  <div class="pan" id="p-priorites"><h2><span>Fixigo · priorités</span><span id="nbTaches"></span></h2><div id="taches"></div></div>
+  <div class="pan" id="p-priorites"><h2><span>Fyxigo · priorités</span><span id="nbTaches"></span></h2><div id="taches"></div></div>
 </section>
 
 <div class="reponse vide" id="reponse"></div><div class="aide" id="aide"></div>
@@ -194,7 +194,7 @@ const INVITE="bonjour jarvis, tu peux me faire le récap de la journée ?";
 /* ── Démarrage ── */
 (function(){let vu=false;try{vu=sessionStorage.getItem("jarvis-boot")==="1";sessionStorage.setItem("jarvis-boot","1")}catch(e){}
   const boot=$("#boot");if(vu){boot.remove();return}
-  const L=["noyau neuronal","cortex agenda","liaison stripe · fixigo","liaison moodle","capteurs atmosphériques","synthèse vocale","personnalité · majordome"];let i=0;const pre=$("#bootTxt");
+  const L=["noyau neuronal","cortex agenda","liaison stripe · fyxigo","liaison moodle","capteurs atmosphériques","synthèse vocale","personnalité · majordome"];let i=0;const pre=$("#bootTxt");
   const t=setInterval(()=>{if(i<L.length){pre.innerHTML+=`› ${L[i].toUpperCase().padEnd(30,".")} <b>OK</b>\n`;i++}else{clearInterval(t);pre.innerHTML+=`\n  Bonjour, Monsieur.`;
     setTimeout(()=>{boot.classList.add("fin");setTimeout(()=>boot.remove(),800)},600)}},170)})();
 
@@ -228,8 +228,10 @@ function rendre(){
   let h="";panneau="sem";
   if(s){const dv=s.devise;let v="";if(s.ca_mois_prec_meme_periode){const x=(s.ca_mois/s.ca_mois_prec_meme_periode-1)*100;v=`<small>${x>=0?"+":"−"}${Math.abs(x).toFixed(0)}%</small>`}
     h+=kpi("Nouveaux clients",s.nouveaux_clients_7j,nb,"","",`${nb(s.nouveaux_clients_mois)} ce mois`)+kpi("Encaissé",s.ca_7j,x=>eur(x,dv),"fort","",`mois : ${eur(s.ca_mois,dv)}`)
-      +kpi("MRR",s.mrr,x=>eur(x,dv),"",v,`${nb(s.abonnements_actifs)} abonnés · ${nb(s.essais_en_cours)} essais`);
-    if(o.mrr){const p=Math.min(100,s.mrr/o.mrr*100);h+=`<div class="barre"><i style="width:${p}%"></i></div><div class="leg"><span>objectif ${eur(o.mrr,dv)}</span><span>${p.toFixed(0)} %</span></div>`}
+      +kpi("Commission · mois",s.commission_mois,x=>eur(x,dv),"",v,`${nb(s.paiements_mois)} interventions · panier ${eur(Math.round(s.panier_moyen_mois),dv)}`);
+    if(o.commission_mois){const p=Math.min(100,s.commission_mois/o.commission_mois*100);h+=`<div class="barre"><i style="width:${p}%"></i></div><div class="leg"><span>objectif ${eur(o.commission_mois,dv)}</span><span>${p.toFixed(0)} %</span></div>`}
+    if(s.remboursements_7j)h+=kpi("Remboursements · 7 j",s.rembourse_7j,x=>eur(x,dv),"","",`${nb(s.remboursements_7j)} intervention(s)`);
+    if(s.litiges_ouverts)h+=kpi("Contestations ouvertes",s.litiges_ouverts,nb,"","","à traiter dans Stripe");
     if(s.paiements_echoues_7j)h+=kpi("Paiements échoués",s.paiements_echoues_7j,nb,"","","à relancer");
     if(s.ca_jours&&s.ca_jours.length){const mx=Math.max(1,...s.ca_jours.map(j=>j.montant)),n=s.ca_jours.length,w=100/n;
       h+=`<div class="spark"><svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">${s.ca_jours.map((j,i)=>{const hh=Math.max(1.2,j.montant/mx*29);
@@ -239,7 +241,7 @@ function rendre(){
   $("#semaine").innerHTML=(h||`<div class="vide">Stripe non connecté. Ajoutez la clé avec ajouter-cle.sh.</div>`);
   // hier
   h="";panneau="hier";const hier=new Date(Date.now()-864e5);$("#hierDate").textContent=`${deux(hier.getDate())}/${deux(hier.getMonth()+1)}`;
-  if(s)h+=kpi("Encaissé",s.ca_hier,x=>eur(x,s.devise),"fort")+kpi("Nouveaux clients",s.nouveaux_clients_hier,nb);
+  if(s)h+=kpi("Encaissé",s.ca_hier,x=>eur(x,s.devise),"fort","",`${nb(s.paiements_hier)} intervention(s)`)+kpi("Commission",s.commission_hier,x=>eur(x,s.devise));
   base.filter(i=>i.panneau!=="semaine").forEach(i=>h+=kpi(i.nom,i.valeur,fmtInd(i)));
   $("#hier").innerHTML=h||`<div class="vide">Aucune donnée pour hier.</div>`;
   // agenda
@@ -277,7 +279,7 @@ function rendre(){
   // colonne Neurolink
   const ok=k=>!(k in err)&&d[k]!=null&&!(k==="base"&&!(d.base||[]).length);
   const lignes=[["Agenda",ok("agenda")?"live":"hors ligne",ok("agenda")?"":"ko"],["Stripe",ok("stripe")?"live":"hors ligne",ok("stripe")?"":"ko"],
-    ["Base Fixigo",ok("base")?"live":"hors ligne",ok("base")?"":"ko"],["Moodle",ok("moodle")?"live":(err.moodle?"hors ligne":"à connecter"),ok("moodle")?"":(err.moodle?"ko":"prevu")],
+    ["Base Fyxigo",ok("base")?"live":"hors ligne",ok("base")?"":"ko"],["Moodle",ok("moodle")?"live":(err.moodle?"hors ligne":"à connecter"),ok("moodle")?"":(err.moodle?"ko":"prevu")],
     ["Météo",ok("meteo")?"live":"hors ligne",ok("meteo")?"":"ko"],["Tâches",ok("taches")?"live":"hors ligne",ok("taches")?"":"ko"],
     ["Mémoire",`${(d.memoire||[]).length} souv.`,""],["Rappels",`${(d.rappels||[]).length}`,""],
     ["Cerveau",esc((ETAT.cerveau||"ok").split(" · ")[0]),""],["Voix",ETAT.voix&&ETAT.voix.realiste?"jarvis":"robot",ETAT.voix&&ETAT.voix.realiste?"":"prevu"],
@@ -296,7 +298,7 @@ async function charger(force=false){try{ETAT=await(await fetch("/api/etat"+(forc
 const NOEUDS=(function(){const box=$("#noeuds");let items=[],textes={},maj=0;
   return{maj(d){const s=d.stripe,a=d.agenda,m=d.meteo,t=d.taches,mo=d.moodle;
     textes={agenda:["Agenda",a?`${a.aujourdhui.length} rdv`:"hors ligne"],stripe:["Stripe",s?`${eur(s.ca_7j,s.devise)} · 7 j`:"hors ligne"],
-      moodle:["Moodle",mo?`${(mo.devoirs||[]).length} devoirs`:"à connecter"],mrr:["MRR",s?eur(s.mrr,s.devise):"—"],
+      moodle:["Moodle",mo?`${(mo.devoirs||[]).length} devoirs`:"à connecter"],commission:["Commission",s?eur(s.commission_mois,s.devise):"—"],
       priorites:["Priorités",t?`${t.taches.filter(x=>!x.fait).length} tâches`:"—"],memoire:["Mémoire",`${(d.memoire||[]).length} souvenirs`],
       meteo:["Météo",m?`${m.maintenant}° · ${m.description}`:"—"],raison:["Raisonnement",((ETAT&&ETAT.cerveau)||"—").replace(" · "," ")]};
     items=Object.keys(textes);box.innerHTML=items.map(k=>`<div class="noeud" id="nd-${k}">${esc(textes[k][0])}<small></small></div>`).join("")},
@@ -313,7 +315,7 @@ const PANNEAUX=(function(){const ids={semaine:"p-semaine",hier:"p-hier",moodle:"
     if(!epingle&&duree)minut[n]=setTimeout(()=>cacher(n),duree)}
   function cacher(n){if(epingle)return;const e=el(n);if(!e)return;e.classList.remove("visible");minut[n]=setTimeout(()=>e.classList.remove("ouvert"),420)}
   function selon(t){t=(t||"").toLowerCase();const r=new Set();
-    if(/encaiss|chiffre|stripe|mrr|client|vente|revenu|argent|€|euro|fixigo|business|paiement|abonn/.test(t)){r.add("semaine");r.add("hier")}
+    if(/encaiss|chiffre|stripe|commission|intervention|client|vente|revenu|argent|€|euro|fyxigo|business|paiement|panier|rembours|litige/.test(t)){r.add("semaine");r.add("hier")}
     if(/agenda|rendez|rdv|programme|planning|réunion|reunion|journée|journee|après-midi|apres-midi|ce soir|ce matin/.test(t))r.add("agenda");
     if(/tâche|tache|priorit|à faire|a faire|todo|objectif/.test(t))r.add("priorites");
     if(/devoir|moodle|cours|rendre|examen|quiz|école|ecole|partiel|\bfac\b|prof|exam/.test(t))r.add("moodle");
@@ -475,7 +477,7 @@ const CERVEAU=(function(){
   const rnd=(a,b)=>a+Math.random()*(b-a),gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v)};
   const PAL={video:["#38d6ff","#ff3d5e","#5b74ff","#ffa23a","#a35cff","#2dff95","#ff4f8a","#ff6a4a"],
              bleu:["#38d6ff","#4f7bff","#8fc8ff","#2f9bff","#6a8cff","#5fe0ff","#3d5cff","#a9d8ff"]};
-  const REG=[["agenda",3.14,.15],["stripe",-2.3,-.25],["moodle",-1.57,.3],["mrr",-.35,.2],["priorites",.45,-.3],["memoire",1.05,.25],["meteo",1.65,-.2],["raison",2.35,.3]];
+  const REG=[["agenda",3.14,.15],["stripe",-2.3,-.25],["moodle",-1.57,.3],["commission",-.35,.2],["priorites",.45,-.3],["memoire",1.05,.25],["meteo",1.65,-.2],["raison",2.35,.3]];
   const IDX=Object.fromEntries(REG.map((r,i)=>[r[0],i]));
   const mob=innerWidth<700,NPR=mob?46:96,NF=mob?60:115;
   const noeuds=[],aretes=[],regions=[];

@@ -1,9 +1,9 @@
-"""Objectifs et tâches Fixigo, dans un simple fichier Markdown (~/.jarvis/fixigo.md).
+"""Objectifs et tâches Fyxigo, dans un simple fichier Markdown (~/.jarvis/fyxigo.md).
 
 Format :
 
     # Objectifs
-    - Atteindre 5 000 € de MRR avant fin mars
+    - 3 000 € de commission par mois avant fin mars
 
     # À faire
     - [ ] !!! Relancer les 3 artisans en attente @2026-11-21

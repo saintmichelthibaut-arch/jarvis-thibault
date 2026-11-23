@@ -1,6 +1,6 @@
 # Objectifs
-- Atteindre 5 000 € de MRR
-- 40 nouveaux clients par mois
+- 3 000 € de commission Fyxigo par mois
+- 3 artisans vérifiés par métier dans chaque arrondissement ouvert
 
 # À faire
 <!-- Une tâche par ligne. « ! » à « !!! » = priorité, « @AAAA-MM-JJ » = échéance.
