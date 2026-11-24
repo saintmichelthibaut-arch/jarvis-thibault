@@ -60,7 +60,7 @@ MODELE="qwen3.5:9b"; (( RAM < 16 )) && MODELE="qwen3.5:4b"
 
 read -r -p "  Votre ville pour la météo [Paris] : " VILLE; VILLE="${VILLE:-Paris}"
 read -r -p "  Heure du briefing du matin [07:00] : " HEURE; HEURE="${HEURE:-07:00}"
-read -r -p "  Objectif de MRR Fixigo en € [5000] : " OBJ; OBJ="${OBJ:-5000}"
+read -r -p "  Objectif de commission Fyxigo par mois en € [1500] : " OBJ; OBJ="${OBJ:-1500}"
 echo
 echo "  Le « cerveau » de Jarvis :"
 echo "    1) Sur ce Mac ($MODELE) — gratuit, vos chiffres ne quittent pas le Mac"
@@ -78,7 +78,7 @@ def put(cle, val, section):
 q = lambda v: '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
 put("ville", q(os.environ["VILLE"]), "moi")
 put("heure", q(os.environ["HEURE"]), "briefing")
-put("objectif_mrr", str(int(float(os.environ["OBJ"] or 0))), "fixigo")
+put("objectif_commission_mois", str(int(float(os.environ["OBJ"] or 0))), "fixigo")
 if os.environ["CERV"] == "2":
     put("fournisseur", q("openai"), "cerveau"); put("modele", q("gpt-4.1-mini"), "cerveau")
 else:
@@ -93,7 +93,7 @@ bleu "4/7  Vos clés (rien ne s'affiche quand vous collez : c'est normal)"
 chmod 600 "$JH/secrets.toml"
 read -r -s -p "  Clé OpenAI (sk-…), Entrée pour passer : " K_OPENAI; echo
 read -r -s -p "  Clé Stripe restreinte (rk_live_…), Entrée pour passer : " K_STRIPE; echo
-read -r -s -p "  Adresse de la base Fixigo (postgresql://…), Entrée pour passer : " K_BASE; echo
+read -r -s -p "  Adresse de la base Fyxigo (postgresql://…), Entrée pour passer : " K_BASE; echo
 K_OPENAI="$K_OPENAI" K_STRIPE="$K_STRIPE" K_BASE="$K_BASE" SEC="$JH/secrets.toml" CFG="$JH/config.toml" "$PY" -I - <<'EOF'
 import os, re
 p = os.environ["SEC"]; s = open(p, encoding="utf-8").read()
@@ -143,7 +143,7 @@ bleu "
      (ou Outlook.com) → cochez « Calendriers »
 
   Ensuite : ouvrez l'app « Jarvis » (dossier Applications de votre dossier perso).
-  Vos tâches Fixigo : $JH/fixigo.md
+  Vos tâches Fyxigo : $JH/fixigo.md
 ════════════════════════════════════════════════════════════════════
 "
 open "$HOME/Applications" 2>/dev/null || true

@@ -16,6 +16,22 @@ import time
 from pathlib import Path
 from typing import Callable, List, Optional
 
+
+
+def _micro():
+    """Le micro partagé de Jarvis (ou un faux micro pendant les tests)."""
+    import sys
+
+    faux = sys.modules.get("sounddevice")
+    if faux is not None and not hasattr(faux, "query_devices"):
+        return faux
+    import sounddevice  # noqa: F401  (vérifie que le micro est utilisable)
+
+    from . import micro
+
+    return micro
+
+
 log = logging.getLogger("jarvis.claquement")
 
 TAUX = 16000
@@ -114,7 +130,7 @@ def reveiller(cfg, ev=None) -> None:
 def ecouter(cfg, ev=None) -> None:
     """Boucle d'écoute du micro (thread de fond). Ne fait rien si le micro est indisponible."""
     try:
-        import sounddevice as sd
+        sd = _micro()
     except Exception as exc:  # noqa: BLE001
         log.info("Réveil par claquement indisponible (%s)", exc)
         return

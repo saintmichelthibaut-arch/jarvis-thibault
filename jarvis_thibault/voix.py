@@ -104,6 +104,9 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
 
             reglages = {"stability": .7, "similarity_boost": .85, "style": .15, "use_speaker_boost": True}
             modele = v.get("elevenlabs_modele") or "eleven_multilingual_v2"
+            refus = cfg.dossier / "voix_refusees.txt"  # voix refusées par ElevenLabs : mémorisées, plus jamais réessayées
+            if refus.exists():
+                _VOIX_REFUSEES.update(refus.read_text().split())
             if _time.time() > _ELEVEN_PAUSE["jusqua"]:
                 for vid in [x for x in dict.fromkeys([voix_el, GEORGE]) if x not in _VOIX_REFUSEES]:
                     try:
@@ -116,6 +119,10 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
                             break
                         if "402" in m or "403" in m or "free" in m or "not found" in m or "404" in m:
                             _VOIX_REFUSEES.add(vid)  # voix inutilisable : on n'y revient plus
+                            try:
+                                refus.write_text("\n".join(sorted(_VOIX_REFUSEES)))
+                            except OSError:
+                                pass
         fournisseur = "openai"  # secours
 
     if fournisseur == "openai":

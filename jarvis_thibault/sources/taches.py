@@ -1,4 +1,4 @@
-"""Objectifs et tâches Fixigo, dans un simple fichier Markdown (~/.jarvis/fixigo.md).
+"""Objectifs et tâches Fyxigo, dans un simple fichier Markdown (~/.jarvis/fixigo.md).
 
 Format :
 

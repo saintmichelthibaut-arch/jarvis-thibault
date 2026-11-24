@@ -46,7 +46,9 @@ url = ""
 [fixigo]
 stripe = true
 devise = "EUR"
-objectif_mrr = 5000                        # objectif de revenu mensuel récurrent (€)
+commission = 0.30                          # part de Fyxigo sur chaque intervention
+objectif_commission_mois = 1500            # objectif de commission Fyxigo par mois (€)
+objectif_interventions_mois = 50           # objectif d'interventions payées par mois
 objectif_clients_mois = 40                 # objectif de nouveaux clients par mois
 fichier_taches = "fixigo.md"               # vos objectifs et tâches (~/.jarvis/fixigo.md)
 

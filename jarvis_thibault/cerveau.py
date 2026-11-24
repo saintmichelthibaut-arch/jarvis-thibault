@@ -71,6 +71,8 @@ def collecter(cfg) -> Dict[str, Any]:
         out["memoire"], out["rappels"] = [], []
     out["objectifs_chiffres"] = {
         "mrr": cfg["fixigo"].get("objectif_mrr") or 0,
+        "commission_mois": cfg["fixigo"].get("objectif_commission_mois") or 0,
+        "interventions_mois": cfg["fixigo"].get("objectif_interventions_mois") or 0,
         "clients_mois": cfg["fixigo"].get("objectif_clients_mois") or 0,
     }
     return out
@@ -120,17 +122,29 @@ def contexte_texte(d: Dict[str, Any], cfg) -> str:
         dv = s["devise"]
         o = d["objectifs_chiffres"]
         L.append("FYXIGO — STRIPE :")
-        L.append(f"  - Hier : {_eur(s['ca_hier'], dv)} encaissés, {s['nouveaux_clients_hier']} nouveaux clients.")
-        L.append(f"  - 7 derniers jours : {_eur(s['ca_7j'], dv)}, {s['nouveaux_clients_7j']} nouveaux clients.")
+        tx = int(round((s.get("taux_commission") or .3) * 100))
+        L.append(f"  - Modèle : place de marché, commission Fyxigo {tx} % du prix payé (pas d'abonnement).")
+        L.append(f"  - Hier : {s.get('interventions_hier', 0)} interventions payées, {_eur(s['ca_hier'], dv)} de volume, "
+                 f"{_eur(s.get('commission_hier', 0), dv)} de commission, {s['nouveaux_clients_hier']} nouveaux clients.")
+        L.append(f"  - 7 derniers jours : {s.get('interventions_7j', 0)} interventions, {_eur(s['ca_7j'], dv)} de volume, "
+                 f"{_eur(s.get('commission_7j', 0), dv)} de commission, panier moyen {_eur(s.get('panier_moyen_7j', 0), dv)}.")
         comp = ""
         if s.get("ca_mois_prec_meme_periode"):
             var = (s["ca_mois"] / s["ca_mois_prec_meme_periode"] - 1) * 100
             comp = f" ({var:+.0f} % vs même période le mois dernier)"
-        L.append(f"  - Mois en cours : {_eur(s['ca_mois'], dv)}{comp}, {s['nouveaux_clients_mois']} nouveaux clients.")
-        mrr = f"  - MRR : {_eur(s['mrr'], dv)} ({s['abonnements_actifs']} abonnements actifs, {s['essais_en_cours']} essais en cours)"
-        if o["mrr"]:
-            mrr += f", objectif {_eur(o['mrr'], dv)} soit {s['mrr'] / o['mrr'] * 100:.0f} % atteint"
-        L.append(mrr + ".")
+        L.append(f"  - Mois en cours : {s.get('interventions_mois', 0)} interventions, {_eur(s['ca_mois'], dv)} de volume{comp}, "
+                 f"{_eur(s.get('commission_mois', 0), dv)} de commission, {s['nouveaux_clients_mois']} nouveaux clients.")
+        if o.get("commission_mois"):
+            L.append(f"  - Objectif de commission ce mois : {_eur(o['commission_mois'], dv)} "
+                     f"({s.get('commission_mois', 0) / o['commission_mois'] * 100:.0f} % atteint).")
+        if o.get("interventions_mois"):
+            L.append(f"  - Objectif d'interventions ce mois : {o['interventions_mois']} ({s.get('interventions_mois', 0)} faites).")
+        if s.get("rembourse_mois"):
+            L.append(f"  - Remboursé ce mois : {_eur(s['rembourse_mois'], dv)}.")
+        if s.get("litiges_ouverts"):
+            L.append(f"  - ATTENTION : {s['litiges_ouverts']} litige(s) Stripe ouvert(s) à traiter.")
+        if s.get("abonnements_actifs"):
+            L.append(f"  - Abonnements : MRR {_eur(s['mrr'], dv)} ({s['abonnements_actifs']} actifs).")
         if o["clients_mois"]:
             L.append(f"  - Objectif nouveaux clients ce mois : {o['clients_mois']} ({s['nouveaux_clients_mois']} atteints).")
         if s["paiements_echoues_7j"]:

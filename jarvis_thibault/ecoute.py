@@ -11,6 +11,22 @@ import time
 import wave
 from typing import Callable, Optional
 
+
+
+def _micro():
+    """Le micro partagé de Jarvis (ou un faux micro pendant les tests)."""
+    import sys
+
+    faux = sys.modules.get("sounddevice")
+    if faux is not None and not hasattr(faux, "query_devices"):
+        return faux
+    import sounddevice  # noqa: F401  (vérifie que le micro est utilisable)
+
+    from . import micro
+
+    return micro
+
+
 log = logging.getLogger("jarvis.ecoute")
 TAUX = 16000
 BLOC = 480  # 30 ms
@@ -133,7 +149,7 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                        sensibilite: float = 1.0) -> Optional[bytes]:
     """Renvoie un WAV (bytes) de la phrase prononcée, ou None si personne n'a parlé.
     Le seuil s'adapte au bruit de la pièce (mesuré pendant les 0,3 premières secondes)."""
-    import sounddevice as sd
+    sd = _micro()
 
     from collections import deque
 

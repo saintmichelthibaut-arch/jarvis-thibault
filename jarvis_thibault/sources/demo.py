@@ -58,15 +58,18 @@ def meteo_demo() -> Dict[str, Any]:
 
 
 def stripe_demo() -> Dict[str, Any]:
-    return {"devise": "EUR", "ca_aujourdhui": 0, "ca_hier": 412.0, "ca_7j": 2890.5,
-            "ca_mois": 7340.0, "ca_mois_prec_meme_periode": 6120.0,
+    return {"devise": "EUR", "taux_commission": .30, "ca_aujourdhui": 0, "ca_hier": 327.0, "ca_7j": 2071.0,
+            "ca_mois": 5341.0, "ca_mois_prec_meme_periode": 4470.0,
+            "commission_hier": 98.1, "commission_7j": 621.3, "commission_mois": 1602.3,
+            "interventions_aujourdhui": 0, "interventions_hier": 3, "interventions_7j": 19, "interventions_mois": 49,
+            "panier_moyen_7j": 109.0, "panier_moyen_mois": 109.0, "rembourse_7j": 109.0, "rembourse_mois": 218.0,
+            "litiges_ouverts": 0,
             "nouveaux_clients_aujourdhui": 0, "nouveaux_clients_hier": 3,
-            "nouveaux_clients_7j": 14, "nouveaux_clients_mois": 31, "mrr": 3870.0,
-            "abonnements_actifs": 129, "essais_en_cours": 11, "paiements_echoues_7j": 2,
+            "nouveaux_clients_7j": 14, "nouveaux_clients_mois": 31, "mrr": 0.0,
+            "abonnements_actifs": 0, "essais_en_cours": 0, "paiements_echoues_7j": 1,
             "ca_jours": [{"jour": (date.today() - timedelta(days=13 - i)).isoformat(), "montant": m}
-                         for i, m in enumerate([180, 260, 95, 410, 330, 0, 120, 290, 455, 380, 610, 270, 412, 0])],
-            "derniers_paiements": [{"quand": date.today().isoformat() + "T09:12", "montant": 49.0},
-                                   {"quand": date.today().isoformat() + "T08:40", "montant": 29.0}]}
+                         for i, m in enumerate([109, 218, 0, 327, 218, 109, 0, 218, 436, 327, 545, 218, 327, 0])],
+            "derniers_paiements": [{"quand": date.today().isoformat() + "T09:12", "montant": 109.0}]}
 
 
 def base_demo() -> List[Dict[str, Any]]:

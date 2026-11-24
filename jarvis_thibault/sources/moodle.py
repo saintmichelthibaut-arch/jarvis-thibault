@@ -98,7 +98,7 @@ def moodle(cfg) -> Optional[Dict[str, Any]]:
         n = datetime.now(tz).replace(second=0, microsecond=0)
         d = lambda j, h: (n + timedelta(days=j)).replace(hour=h, minute=0).isoformat(timespec="minutes")  # noqa: E731
         return {"site": "Moodle de l'école", "cours": [{"nom": "Marketing digital", "progression": 62}, {"nom": "Finance d'entreprise", "progression": 48}],
-                "devoirs": [{"titre": "Étude de cas Fixigo", "cours": "Marketing digital", "type": "assign", "echeance": d(1, 23), "en_retard": False, "url": "", "action": "Remettre"},
+                "devoirs": [{"titre": "Étude de cas Fyxigo", "cours": "Marketing digital", "type": "assign", "echeance": d(1, 23), "en_retard": False, "url": "", "action": "Remettre"},
                             {"titre": "Quiz chapitre 4", "cours": "Finance d'entreprise", "type": "quiz", "echeance": d(3, 18), "en_retard": False, "url": "", "action": "Tenter"},
                             {"titre": "Dossier business plan", "cours": "Entrepreneuriat", "type": "assign", "echeance": d(8, 12), "en_retard": False, "url": "", "action": "Remettre"}]}
     mc = cfg["moodle"]

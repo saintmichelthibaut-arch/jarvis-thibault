@@ -53,6 +53,9 @@ DEFAUTS: Dict[str, Any] = {
         "stripe": True,
         "devise": "EUR",
         "objectif_mrr": 0,
+        "commission": 0.30,                 # part de Fyxigo sur chaque intervention
+        "objectif_commission_mois": 0,
+        "objectif_interventions_mois": 0,
         "objectif_clients_mois": 0,
         "fichier_taches": "fixigo.md",
         "base": {"active": False, "indicateurs": []},
@@ -114,4 +117,8 @@ def charger(demo: bool | None = None) -> Config:
         secrets = tomllib.loads(fs.read_text(encoding="utf-8"))
     if demo is None:
         demo = os.environ.get("JARVIS_DEMO", "") not in ("", "0")
+    # Nom de l'entreprise : « Fyxigo ». Les deux écritures de section sont acceptées,
+    # [fyxigo] l'emporte ; le code lit toujours cfg["fixigo"].
+    if isinstance(data.get("fyxigo"), dict):
+        data["fixigo"] = _fusion(data.get("fixigo") or {}, data.pop("fyxigo"))
     return Config(data=_fusion(DEFAUTS, data), secrets=secrets, dossier=DOSSIER, demo=demo)

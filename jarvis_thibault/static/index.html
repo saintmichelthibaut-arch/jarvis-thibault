@@ -221,9 +221,15 @@ function rendre(){
   // 7 derniers jours
   let h="";panneau="sem";
   if(s){const dv=s.devise;let v="";if(s.ca_mois_prec_meme_periode){const x=(s.ca_mois/s.ca_mois_prec_meme_periode-1)*100;v=`<small>${x>=0?"+":"−"}${Math.abs(x).toFixed(0)}%</small>`}
-    h+=kpi("Nouveaux clients",s.nouveaux_clients_7j,nb,"","",`${nb(s.nouveaux_clients_mois)} ce mois`)+kpi("Encaissé",s.ca_7j,x=>eur(x,dv),"fort","",`mois : ${eur(s.ca_mois,dv)}`)
-      +kpi("MRR",s.mrr,x=>eur(x,dv),"",v,`${nb(s.abonnements_actifs)} abonnés · ${nb(s.essais_en_cours)} essais`);
-    if(o.mrr){const p=Math.min(100,s.mrr/o.mrr*100);h+=`<div class="barre"><i style="width:${p}%"></i></div><div class="leg"><span>objectif ${eur(o.mrr,dv)}</span><span>${p.toFixed(0)} %</span></div>`}
+    const tx=Math.round((s.taux_commission||.3)*100);
+    h+=kpi("Commission Fyxigo",s.commission_7j,x=>eur(x,dv),"fort",v,`${tx} % · mois : ${eur(s.commission_mois,dv)}`)
+      +kpi("Interventions payées",s.interventions_7j,nb,"","",`${nb(s.interventions_mois)} ce mois`)
+      +kpi("Volume payé",s.ca_7j,x=>eur(x,dv),"","",`panier moyen ${eur(s.panier_moyen_7j,dv)}`)
+      +kpi("Nouveaux clients",s.nouveaux_clients_7j,nb,"","",`${nb(s.nouveaux_clients_mois)} ce mois`);
+    if(o.commission_mois){const p=Math.min(100,(s.commission_mois||0)/o.commission_mois*100);h+=`<div class="barre"><i style="width:${p}%"></i></div><div class="leg"><span>objectif commission ${eur(o.commission_mois,dv)}</span><span>${p.toFixed(0)} %</span></div>`}
+    else if(o.interventions_mois){const p=Math.min(100,(s.interventions_mois||0)/o.interventions_mois*100);h+=`<div class="barre"><i style="width:${p}%"></i></div><div class="leg"><span>objectif ${o.interventions_mois} interventions</span><span>${p.toFixed(0)} %</span></div>`}
+    if(s.litiges_ouverts)h+=kpi("Litiges ouverts",s.litiges_ouverts,nb,"","","à traiter");
+    if(s.rembourse_7j)h+=kpi("Remboursé",s.rembourse_7j,x=>eur(x,dv),"","","7 jours");
     if(s.paiements_echoues_7j)h+=kpi("Paiements échoués",s.paiements_echoues_7j,nb,"","","à relancer");
     if(s.ca_jours&&s.ca_jours.length){const mx=Math.max(1,...s.ca_jours.map(j=>j.montant)),n=s.ca_jours.length,w=100/n;
       h+=`<div class="spark"><svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">${s.ca_jours.map((j,i)=>{const hh=Math.max(1.2,j.montant/mx*29);
@@ -233,7 +239,7 @@ function rendre(){
   $("#semaine").innerHTML=(h||`<div class="vide">Stripe non connecté. Ajoutez la clé avec ajouter-cle.sh.</div>`);
   // hier
   h="";panneau="hier";const hier=new Date(Date.now()-864e5);$("#hierDate").textContent=`${deux(hier.getDate())}/${deux(hier.getMonth()+1)}`;
-  if(s)h+=kpi("Encaissé",s.ca_hier,x=>eur(x,s.devise),"fort")+kpi("Nouveaux clients",s.nouveaux_clients_hier,nb);
+  if(s)h+=kpi("Commission",s.commission_hier,x=>eur(x,s.devise),"fort")+kpi("Interventions payées",s.interventions_hier,nb)+kpi("Volume payé",s.ca_hier,x=>eur(x,s.devise))+kpi("Nouveaux clients",s.nouveaux_clients_hier,nb);
   base.filter(i=>i.panneau!=="semaine").forEach(i=>h+=kpi(i.nom,i.valeur,fmtInd(i)));
   $("#hier").innerHTML=h||`<div class="vide">Aucune donnée pour hier.</div>`;
   // agenda
@@ -290,7 +296,7 @@ async function charger(force=false){try{ETAT=await(await fetch("/api/etat"+(forc
 const NOEUDS=(function(){const box=$("#noeuds");let items=[],textes={},maj=0;
   return{maj(d){const s=d.stripe,a=d.agenda,m=d.meteo,t=d.taches,mo=d.moodle;
     textes={agenda:["Agenda",a?`${a.aujourdhui.length} rdv`:"hors ligne"],stripe:["Stripe",s?`${eur(s.ca_7j,s.devise)} · 7 j`:"hors ligne"],
-      moodle:["Moodle",mo?`${(mo.devoirs||[]).length} devoirs`:"à connecter"],mrr:["MRR",s?eur(s.mrr,s.devise):"—"],
+      moodle:["Moodle",mo?`${(mo.devoirs||[]).length} devoirs`:"à connecter"],mrr:["Commission",s?eur(s.commission_mois,s.devise)+" · mois":"—"],
       priorites:["Priorités",t?`${t.taches.filter(x=>!x.fait).length} tâches`:"—"],memoire:["Mémoire",`${(d.memoire||[]).length} souvenirs`],
       meteo:["Météo",m?`${m.maintenant}° · ${m.description}`:"—"],raison:["Raisonnement",((ETAT&&ETAT.cerveau)||"—").replace(" · "," ")]};
     items=Object.keys(textes);box.innerHTML=items.map(k=>`<div class="noeud" id="nd-${k}">${esc(textes[k][0])}<small></small></div>`).join("")},
