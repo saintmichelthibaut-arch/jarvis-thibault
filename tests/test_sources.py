@@ -194,6 +194,9 @@ def test_double_claquement():
     assert _compter(_signal([(.5,)])) == 0                 # un seul claquement → rien
     assert _compter(_signal([(.5,), (2.2,)])) == 0         # trop espacés → rien
     assert _compter(_signal([(.5, "voix"), (1.0, "voix")])) == 0  # quelqu'un parle → rien
+    assert _compter(_signal([(.5,), (.9,), (1.3,)])) == 0  # 3 claquements (rafale) → rien
+    assert _compter(_signal([(.3,), (.6,), (.9,), (1.2,), (1.5,), (1.8,)])) == 0  # clavier / tapotements → rien
+    assert _compter(_signal([(.5,), (.9,), (2.6,)], duree=3.5)) == 1  # clap-clap puis un bruit bien plus tard → réveil
 
 
 def test_reponse_en_flux(tmp_path, monkeypatch):
@@ -252,3 +255,35 @@ def test_elevenlabs(tmp_path):
     assert elevenlabs_voix("cle", transport=t)[0] == {"id": "abc", "nom": "Majordome", "categorie": "professional", "description": "british"}
     f = elevenlabs_tts("cle", "abc", "Bonjour Monsieur.", tmp_path / "a.mp3", transport=t)
     assert f.read_bytes().startswith(b"ID3") and len(vus) == 2 and vus[1]["text"] == "Bonjour Monsieur."
+
+
+def test_echo_de_jarvis_ignore():
+    from jarvis_thibault import ecoute
+
+    ecoute._DIT.clear()
+    ecoute.memoriser_dit("À votre service, Monsieur.")
+    ecoute.memoriser_dit("Votre chiffre du jour s'élève à mille deux cents euros, Monsieur, ce qui reste honorable.")
+    assert ecoute.est_parasite("à votre service monsieur")                       # sa propre salutation
+    assert ecoute.est_parasite("s'élève à mille deux cents euros")               # sa propre phrase réentendue
+    assert ecoute.est_parasite("Sous-titres réalisés par la communauté d'Amara.org")
+    assert ecoute.est_parasite("Monsieur.")                                      # un mot à lui, juste après l'avoir dit
+    assert not ecoute.est_parasite("Quelle est la météo demain à Garches ?")    # vous
+    assert not ecoute.est_parasite("Non, plutôt mes devoirs Moodle")             # vous
+    assert not ecoute.est_parasite("oui")                                        # réponse courte
+    assert not ecoute.est_parasite("stop")
+
+
+def test_clap_ignore_quand_jarvis_parle_ou_ecoute():
+    import time as _t
+
+    from jarvis_thibault import claquement, ecoute
+
+    ecoute.LECTURE.update(actif=True)
+    assert claquement._occupe() == "Jarvis parle"
+    ecoute.LECTURE.update(actif=False, fin=_t.monotonic())
+    assert claquement._occupe() == "Jarvis parle"           # juste après avoir parlé (écho de la pièce)
+    ecoute.LECTURE.update(fin=_t.monotonic() - 10)
+    assert claquement._occupe() is None
+    with ecoute.VERROU:
+        assert claquement._occupe() == "Jarvis vous écoute"
+    assert claquement._occupe() is None

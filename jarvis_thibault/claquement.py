@@ -40,61 +40,115 @@ ETAT_MICRO: dict = {"ok": None}
 
 
 class Detecteur:
-    """Reçoit des blocs d'échantillons (floats -1..1) et signale les doubles claquements."""
+    """Reçoit des blocs d'échantillons (floats -1..1) et signale les doubles claquements.
 
-    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .15, ecart_max: float = 1.3,
-                 pause_apres: float = 4.0, horloge: Callable[[], float] = time.monotonic):
+    Un claquement : son soudain (attaque en < 30 ms), aigu (énergie dans les hautes fréquences, pas comme
+    une voix), très bref (retombé en ~140 ms). Un clap-clap : EXACTEMENT deux claquements de force
+    comparable, espacés de 0,2 à 1,1 s, avec du calme avant et après (une rafale de clics — clavier,
+    musique, vaisselle — est ignorée)."""
+
+    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .2, ecart_max: float = 1.1,
+                 pause_apres: float = 10.0, horloge: Callable[[], float] = time.monotonic):
         self.k = 5.0 / max(.3, sensibilite)        # combien de fois plus fort que le bruit ambiant
         self.min_abs = .02 / max(.3, sensibilite)   # niveau minimum absolu (RMS)
-        self.decroissance = .6                      # le son doit retomber sous 50 % en ~140 ms
+        self.decroissance = .6                      # le son doit retomber sous 60 % en ~140 ms
+        self.aigu_min = .25                         # sons sourds (porte, pas, coup sur la table) ≈ 0,05–0,2 · claquement ≈ 0,4–1,4
+        self.calme_apres = .6                       # pas de 3e claquement dans les 0,6 s qui suivent
         self.nb_claps = 0
         self.ecart_min, self.ecart_max, self.pause_apres = ecart_min, ecart_max, pause_apres
         self.horloge = horloge
         self.bruit = .004
-        self.candidat: Optional[tuple] = None  # (t, rms, blocs écoulés, rms max des blocs suivants)
-        self.claps: List[float] = []
+        self.avant = [0.0, 0.0]                     # RMS des 2 blocs précédents (pour l'attaque)
+        self.candidat: Optional[tuple] = None       # (t, rms, blocs écoulés, rms max des blocs suivants)
+        self.claps: List[tuple] = []                # (t, rms) des claquements récents
+        self.attente: Optional[float] = None        # double claquement repéré : on vérifie le calme après
+        self.sons: List[float] = []                 # débuts de tous les sons nets (même faibles) des 3 dernières s
+        self._au_dessus = False
         self.dernier_reveil = -1e9
         self.dernier_clap = -1e9
+
+    def reinitialiser(self) -> None:
+        """Oublie les claquements en cours (Jarvis parle ou écoute : ce n'est pas le moment)."""
+        self.candidat = None
+        self.claps = []
+        self.attente = None
+        self.sons = []
 
     def bloc(self, ech) -> bool:
         t = self.horloge()
         n = len(ech) or 1
         rms = math.sqrt(sum(x * x for x in ech) / n)
-        crete = max((abs(x) for x in ech), default=0.0)
         reveil = False
+        # tout début de son net, même faible (clic de clavier, objet posé…) : sert à exiger le calme autour du clap-clap
+        au_dessus = rms > max(self.min_abs * .4, self.bruit * 3)
+        if au_dessus and not self._au_dessus:
+            self.sons = [x for x in self.sons if t - x < 3] + [t]
+            if self.attente is not None and all(t - c[0] > .2 for c in self.claps[-2:]):
+                self.attente = None  # un son juste après le clap-clap : rafale ou bruit, pas un appel
+        self._au_dessus = au_dessus
+        if self.attente is not None and t >= self.attente and not self.candidat:
+            self.attente = None
+            self.claps = []
+            self.dernier_reveil = t
+            reveil = True
         if self.candidat:
             t0, r0, vus, suite = self.candidat
             suite = max(suite, rms if vus >= 2 else 0.0)  # on laisse 2 blocs pour la queue du claquement
             vus += 1
             if vus >= 9:  # ~140 ms après : un claquement est retombé, une voix non
                 if suite < r0 * self.decroissance:
-                    reveil = self._clap(t0)
+                    self._clap(t0, r0)
                 elif time.time() - getattr(self, "_dernier_rejet", 0) > 20:
                     self._dernier_rejet = time.time()
                     log.info("Bruit fort ignoré (pas assez bref pour un claquement)")
                 self.candidat = None
             else:
                 self.candidat = (t0, r0, vus, suite)
-        elif (rms > max(self.min_abs, self.bruit * self.k) and crete > 1.8 * rms
-              and t - self.dernier_clap > .12):
-            self.candidat = (t, rms, 0, 0.0)
+        elif rms > max(self.min_abs, self.bruit * self.k) and t - self.dernier_clap > .12:
+            crete = max((abs(x) for x in ech), default=0.0)
+            soudain = rms > 2 * max(self.avant[0], 1e-6)
+            aigu = math.sqrt(sum((ech[i] - ech[i - 1]) ** 2 for i in range(1, n)) / n) / max(rms, 1e-9)
+            if crete > 1.8 * rms and soudain and aigu >= self.aigu_min:
+                self.candidat = (t, rms, 0, 0.0)
         else:
             # bruit ambiant : moyenne lente, seulement hors pics
             self.bruit = .995 * self.bruit + .005 * min(rms, self.bruit * 3 + 1e-4)
+        self.avant = [self.avant[1], rms]
         return reveil
 
-    def _clap(self, t: float) -> bool:
+    def _clap(self, t: float, force: float = 1.0) -> None:
         self.dernier_clap = t
         self.nb_claps += 1
-        log.info("Claquement entendu")
-        if t - self.dernier_reveil < self.pause_apres:
-            return False
-        self.claps = [c for c in self.claps if t - c <= self.ecart_max] + [t]
-        if len(self.claps) >= 2 and self.ecart_min <= self.claps[-1] - self.claps[-2] <= self.ecart_max:
-            self.claps = []
-            self.dernier_reveil = t
-            return True
-        return False
+        log.info("Claquement entendu (force %.3f)", force)
+        if self.attente is not None:  # un 3e : c'est une rafale (clavier, musique…), pas un clap-clap
+            log.info("Claquements en rafale : ignorés")
+            self.attente = None
+        self.claps = [c for c in self.claps if t - c[0] <= 3] + [(t, force)]
+        if t - self.dernier_reveil < self.pause_apres or len(self.claps) < 2:
+            return
+        (t1, f1), (t2, f2) = self.claps[-2], self.claps[-1]
+        calme_avant = (len(self.claps) < 3 or t1 - self.claps[-3][0] > 1.0) and \
+            not any(.05 < t1 - x < .8 for x in self.sons)
+        comparables = max(f1, f2) / max(min(f1, f2), 1e-9) < 6
+        if self.ecart_min <= t2 - t1 <= self.ecart_max and calme_avant and comparables:
+            self.attente = t + self.calme_apres
+
+
+_REVEIL = threading.Lock()
+
+
+def _occupe() -> Optional[str]:
+    """Raison de ne PAS écouter les claquements en ce moment (sinon None).
+    Sa propre voix (« À votre service… ») ou la vôtre pendant une conversation ne doivent jamais le réveiller."""
+    from . import ecoute
+
+    if ecoute.LECTURE.get("actif") or time.monotonic() - ecoute.LECTURE.get("fin", -1e9) < 2.5:
+        return "Jarvis parle"
+    if ecoute.VERROU.locked():
+        return "Jarvis vous écoute"
+    if _REVEIL.locked():
+        return "réveil en cours"
+    return None
 
 
 def fenetre_ouverte() -> bool:
@@ -134,7 +188,10 @@ def ouvrir_app(cfg) -> str:
 
 
 def reveiller(cfg, ev=None) -> None:
-    """Ouvre l'app Jarvis en plein écran (ou la ramène devant) et salue."""
+    """Ouvre l'app Jarvis en plein écran et salue (une seule fois, même si on claque encore)."""
+    if not _REVEIL.acquire(blocking=False):
+        log.info("Réveil déjà en cours : ignoré")
+        return
     log.info("Réveil demandé")
     threading.Thread(target=ouvrir_app, args=(cfg,), daemon=True).start()
     appel = (cfg["moi"]["appellations"] or ["Monsieur"])[0]
@@ -157,6 +214,8 @@ def reveiller(cfg, ev=None) -> None:
                     ev.publier("ecoute_fin", "Écoute", "terminée", "langage")
         except Exception as exc:  # noqa: BLE001
             log.warning("Salutation / écoute impossible : %s", exc)
+        finally:
+            _REVEIL.release()
 
     threading.Thread(target=saluer, daemon=True).start()
 
@@ -196,7 +255,13 @@ def ecouter(cfg, ev=None) -> None:
                                 break  # on réessaie dans 30 s (au cas où l'accès vient d'être donné)
                             ETAT_MICRO["ok"] = True
                             log.info("Micro : OK (niveau max %.3f sur 8 s)", maxi)
+                    if _occupe():
+                        det.reinitialiser()
+                        continue
                     if det.bloc(donnees[:, 0].tolist()):
+                        if fenetre_ouverte():
+                            log.info("Double claquement : fenêtre déjà ouverte → ignoré")
+                            continue
                         log.info("Double claquement détecté")
                         reveiller(cfg, ev)
         except Exception as exc:  # noqa: BLE001

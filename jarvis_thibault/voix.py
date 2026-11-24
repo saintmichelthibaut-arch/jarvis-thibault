@@ -34,6 +34,7 @@ import time as _time
 
 _ELEVEN_SEM = _threading.BoundedSemaphore(2)  # le compte gratuit n'accepte que 2 demandes à la fois
 _VOIX_REFUSEES: set = set()
+_MODELES_REFUSES: set = set()
 _ELEVEN_PAUSE = {"jusqua": 0.0}  # voix « George » d'ElevenLabs (voix de base, offre gratuite)
 
 
@@ -83,14 +84,24 @@ def elevenlabs_voix(cle: str, transport=None) -> list:
 def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
     """Transforme le texte en fichier audio. Renvoie None si la voix est désactivée."""
     v = cfg["voix"]
+    nom_origine = nom
     fournisseur = v.get("fournisseur", "openai")
     if fournisseur == "aucune" or not texte.strip():
         return None
+    try:
+        from . import ecoute
+
+        ecoute.memoriser_dit(texte)  # pour ne pas prendre sa propre voix pour la vôtre
+    except Exception:  # noqa: BLE001
+        pass
     # Clé ElevenLabs présente → George (ou la voix choisie) d'office, OpenAI en secours
     if fournisseur == "openai" and cfg.secret("elevenlabs_api_key") and v.get("auto_elevenlabs", True):
         fournisseur = "elevenlabs"
     voix_el = v.get("elevenlabs_voix") or GEORGE
-    suffixe = f"-el-{voix_el[:6]}" if fournisseur == "elevenlabs" else ""
+    modele_el = v.get("elevenlabs_modele") or "eleven_turbo_v2_5"
+    if modele_el in _MODELES_REFUSES:
+        modele_el = "eleven_multilingual_v2"
+    suffixe = f"-el-{voix_el[:6]}-{modele_el.replace('eleven_', '')[:12]}" if fournisseur == "elevenlabs" else ""
     nom = (nom or hashlib.sha1(f"{fournisseur}{v}{texte}".encode()).hexdigest()[:16]) + suffixe
     dossier = dossier_audio(cfg)
 
@@ -103,7 +114,7 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
             import logging
 
             reglages = {"stability": .7, "similarity_boost": .85, "style": .15, "use_speaker_boost": True}
-            modele = v.get("elevenlabs_modele") or "eleven_multilingual_v2"
+            modele = modele_el
             refus = cfg.dossier / "voix_refusees.txt"  # voix refusées par ElevenLabs : mémorisées, plus jamais réessayées
             if refus.exists():
                 _VOIX_REFUSEES.update(refus.read_text().split())
@@ -113,6 +124,9 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
                         return elevenlabs_tts(cle, vid, texte, sortie, modele, reglages)
                     except Exception as exc:  # noqa: BLE001
                         m = str(exc).lower()
+                        if modele != "eleven_multilingual_v2" and "model" in m and any(c in m for c in ("400", "404", "422")):
+                            _MODELES_REFUSES.add(modele)  # modèle rapide indisponible : modèle classique, même voix
+                            return synthetiser(cfg, texte, nom=nom_origine)
                         logging.getLogger("jarvis.voix").warning("ElevenLabs (voix %s) refusée : %s", vid, m[:200])
                         if "quota" in m or "401" in m:
                             _ELEVEN_PAUSE["jusqua"] = _time.time() + 6 * 3600  # crédit épuisé : OpenAI pour 6 h, sans mélanger
@@ -154,9 +168,23 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
 
 
 def jouer(fichier: Path, attendre: bool = False) -> None:
-    """Joue un fichier audio sur les haut-parleurs du Mac (sans navigateur)."""
-    if platform.system() == "Darwin" and shutil.which("afplay"):
-        (subprocess.run if attendre else subprocess.Popen)(["afplay", str(fichier)])
+    """Joue un fichier audio sur les haut-parleurs du Mac (sans navigateur).
+    Pendant la lecture, Jarvis sait qu'il parle : le clap-clap ne réagit pas à sa propre voix."""
+    if not (platform.system() == "Darwin" and shutil.which("afplay")):
+        return
+    from . import ecoute
+
+    p = subprocess.Popen(["afplay", str(fichier)])
+    ecoute.lecture_commence(fichier)
+
+    def attendre_fin():
+        p.wait()
+        ecoute.lecture_fin()
+
+    if attendre:
+        attendre_fin()
+    else:
+        _threading.Thread(target=attendre_fin, daemon=True).start()
 
 
 def notifier(titre: str, message: str) -> None:

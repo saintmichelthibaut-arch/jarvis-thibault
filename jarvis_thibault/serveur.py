@@ -441,7 +441,13 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
                 if not j.get("annule") and j.get("maxi", 1) < 1e-4:
                     q.put({"type": "erreur", "erreur": "macOS bloque le micro (Réglages Système → Confidentialité → Micro → Jarvis)"})
                 elif wav:
-                    q.put({"type": "texte", "texte": ecoute.transcrire(cfg, wav)})
+                    texte = ecoute.transcrire(cfg, wav)
+                    if ecoute.est_parasite(texte):
+                        log.info("Entendu (ignoré : écho de Jarvis ou bruit) : %r", texte)
+                        q.put({"type": "rien"})
+                    else:
+                        log.info("Entendu : %r", texte)
+                        q.put({"type": "texte", "texte": texte})
                 else:
                     q.put({"type": "rien"})
             except Exception as exc:  # noqa: BLE001

@@ -397,25 +397,37 @@ async function demander(q){if(!q||!q.trim())return;
   if(occupe){jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();await arreterGuet()}
   occupe=true;const monJeton=++jeton;afficherAide("");PANNEAUX.selon(q);transcript(q);afficher("");statut("reflexion");
   if(MOTS_FIN.test(q.trim()))conversation=false;
-  let chaine=Promise.resolve(),fin={},interrompu=false,guet=null;
-  const surParole=()=>{if(jeton!==monJeton)return;interrompu=true;jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();
-    statut("ecoute");afficher("");transcript("je vous écoute…");suivreNiveau(true)};
+  let chaine=Promise.resolve(),fin={},texteCoupe=null,suspens=null,reprendre=null;
+  const actif=()=>jeton===monJeton;
+  /* Vous parlez pendant qu'il parle : il se tait AUSSITÔT (pause), puis
+     - vous avez vraiment dit quelque chose → il abandonne sa réponse et vous répond ;
+     - fausse alerte (un bruit, sa propre voix) → il reprend exactement là où il s'était arrêté. */
+  const surParole=()=>{if(!actif()||suspens)return;suspens=new Promise(r=>reprendre=r);
+    try{lecteur&&lecteur.pause()}catch(e){}
+    fetch("/api/lecture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:null})}).catch(()=>{});
+    statut("ecoute");transcript("je vous écoute…");suivreNiveau(true)};
+  const guetter=()=>{if(!DANS_APP||!conversation||guetEnCours||!actif())return;const g=guetEnCours=ecouteFlux(true,surParole);
+    g.then(res=>{if(guetEnCours===g)guetEnCours=null;if(!suspens)return;const r=reprendre;suspens=null;
+      if(!actif()){r();return}
+      suivreNiveau(false);
+      if(res.texte){texteCoupe=res.texte;jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();r();return}
+      statut("parole");transcript(q);if(finCourante&&lecteur&&lecteur.src)lecteur.play().catch(()=>{});r();guetter()})};
   ctrlParler=new AbortController();
   try{const r=await fetch("/api/parler_flux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique}),signal:ctrlParler.signal});
     if(!r.ok)throw new Error("erreur "+r.status);
-    await lireFlux(r,o=>{if(jeton!==monJeton)return;
+    await lireFlux(r,o=>{if(!actif())return;
       if(o.type==="phrase"){if(o.audio)fetch(o.audio).catch(()=>{});
-        if(!guet&&DANS_APP&&conversation)guet=guetEnCours=ecouteFlux(true,surParole);
-        chaine=chaine.then(()=>jeton===monJeton?jouer(o.audio,o.texte):null)}
+        guetter();
+        chaine=chaine.then(async()=>{while(suspens)await suspens;return actif()?jouer(o.audio,o.texte):null})}
       else if(o.type==="actions")charger();
       else if(o.type==="fin"){fin=o;if(o.erreur)afficherAide("Détail : "+o.erreur);if((o.actions||[]).length)charger();PANNEAUX.selon(q+" "+(o.reponse||""))}});
     await chaine}
-  catch(e){if(!interrompu&&e.name!=="AbortError"&&jeton===monJeton){afficher("Je crains d'avoir perdu la liaison avec le serveur, "+appellation+".");afficherAide(String(e.message||e))}}
+  catch(e){if(texteCoupe===null&&e.name!=="AbortError"&&actif()){afficher("Je crains d'avoir perdu la liaison avec le serveur, "+appellation+".");afficherAide(String(e.message||e))}}
+  while(suspens)await suspens;  // vous avez commencé à parler juste à la fin : on attend de savoir ce que vous avez dit
   if(!fin.erreur&&fin.reponse)historique.push({role:"user",content:q},{role:"assistant",content:fin.reponse});
-  if(interrompu){const res=guet?await guet:{texte:""};if(guetEnCours===guet)guetEnCours=null;suivreNiveau(false);occupe=false;
-    if(res.texte)return demander(res.texte);statut("veille");transcript(INVITE);return ecouterServeur(true)}
-  if(jeton!==monJeton)return;  // coupé par une autre action : c'est elle qui reprend la main
-  if(guet){guetEnCours=guet;await arreterGuet()}
+  if(texteCoupe!==null){suivreNiveau(false);occupe=false;return demander(texteCoupe)}
+  if(!actif())return;  // coupé par une autre action : c'est elle qui reprend la main
+  await arreterGuet();
   const lancer=(fin.actions||[]).find(a=>a.type==="lancer");
   occupe=false;transcript(INVITE);statut("veille");
   if(lancer)return briefing(lancer.quoi);

@@ -8,7 +8,7 @@ JH="${JARVIS_HOME:-$HOME/.jarvis}"
 [[ -x "$JH/app/.venv/bin/python" ]] || { echo "Jarvis n'est pas encore installé : lancez d'abord installer.sh"; exit 1; }
 
 echo "Mise à jour de Jarvis…"
-rsync -a --delete --exclude ".venv" --exclude "__pycache__" --exclude "tests" "$ICI/" "$JH/app/src/"
+rsync -a --delete --exclude ".git" --exclude ".venv" --exclude "__pycache__" --exclude "tests" "$ICI/" "$JH/app/src/"
 uv pip install -q -p "$JH/app/.venv" --reinstall-package jarvis-thibault "$JH/app/src"
 
 # Corrige une heure de briefing écrite « 8h » ou « 08h00 » en « 08:00 »
@@ -20,6 +20,8 @@ def fix(m):
     t = re.match(r"\s*(\d{1,2})\s*(?:[:hH.]\s*(\d{1,2})?)?\s*$", m.group(2))
     return m.group(1) + (f'"{int(t.group(1)):02d}:{int(t.group(2) or 0):02d}"' if t else f'"{m.group(2)}"')
 s = re.sub(r'(?m)^(heure\s*=\s*)"([^"]*)"', fix, s, count=1)
+# Voix : modèle ElevenLabs rapide (même voix George, réponse ~2x plus rapide)
+s = s.replace('elevenlabs_modele = "eleven_multilingual_v2"', 'elevenlabs_modele = "eleven_turbo_v2_5"')
 open(p, "w", encoding="utf-8").write(s)
 EOF
 

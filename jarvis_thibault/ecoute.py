@@ -37,6 +37,56 @@ ENV_PAS = BLOC / TAUX  # 30 ms
 LECTURE: dict = {"env": None, "t0": 0.0, "actif": False, "fin": 0.0}
 _ENVS: dict = {}
 
+# ── Ce que Jarvis vient de dire : si le micro le « réentend », ce n'est pas vous qui parlez ──
+from collections import deque as _deque
+
+_DIT: "_deque" = _deque(maxlen=80)  # (horodatage, mots)
+_HALLUCINATIONS = ("sous-titr", "sous titr", "amara", "merci d'avoir regard", "abonnez-vous", "abonnez vous",
+                   "merci de votre attention", "radio-canada", "www.", ".com", ".org")
+_REPONSES_COURTES = {"oui", "non", "stop", "merci", "ok", "okay", "daccord", "vasy", "continue", "arrete",
+                     "tais", "toi", "attends", "jarvis", "si", "bien", "parfait", "super", "go"}
+
+
+def _mots(texte: str) -> list:
+    import re
+    import unicodedata
+
+    t = unicodedata.normalize("NFD", (texte or "").lower().replace("’", "'"))
+    t = "".join(c for c in t if unicodedata.category(c) != "Mn").replace("'", "")
+    return re.findall(r"[a-z0-9]+", t)
+
+
+def memoriser_dit(texte: str) -> None:
+    """Appelé pour chaque phrase que Jarvis prononce."""
+    m = _mots(texte)
+    if m:
+        _DIT.append((time.time(), m))
+
+
+def est_parasite(texte: str) -> bool:
+    """Vrai si la « phrase entendue » n'est pas de vous : la propre voix de Jarvis captée par le micro,
+    ou une phrase fantôme inventée par la transcription sur du bruit."""
+    t = (texte or "").lower()
+    if any(h in t for h in _HALLUCINATIONS):
+        return True
+    m = _mots(texte)
+    if not m:
+        return True
+    maintenant = time.time()
+    recents = [w for ts, w in _DIT if maintenant - ts < 120]
+    if not recents:
+        return False
+    if len(m) >= 3:
+        bigrammes = set()
+        for w in recents:
+            bigrammes.update(zip(w, w[1:]))
+        mb = list(zip(m, m[1:]))
+        return sum(b in bigrammes for b in mb) / len(mb) >= .6
+    if set(m) <= _REPONSES_COURTES:
+        return False
+    tres_recents = [" ".join(w) for ts, w in _DIT if maintenant - ts < 15]
+    return any(f" {' '.join(m)} " in f" {w} " for w in tres_recents)
+
 
 def enveloppe(fichier) -> Optional[list]:
     """Niveau sonore (RMS toutes les 30 ms) d'un fichier audio que Jarvis va prononcer."""
@@ -281,6 +331,9 @@ def ecouter_commande(cfg) -> str:
     if not wav:
         return ""
     texte = transcrire(cfg, wav)
+    if est_parasite(texte):
+        log.info("Entendu (ignoré : écho de Jarvis ou bruit) : %r", texte)
+        return ""
     log.info("Entendu : %r", texte)
     return texte
 
