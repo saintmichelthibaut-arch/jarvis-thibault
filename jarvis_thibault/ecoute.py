@@ -37,6 +37,7 @@ DERNIER_STOP = {"t": -1e9}  # fenêtre fermée / écoute arrêtée : une écoute
 ENV_PAS = BLOC / TAUX  # 30 ms
 LECTURE: dict = {"env": None, "t0": 0.0, "actif": False, "fin": 0.0}
 _ENVS: dict = {}
+_SPECTRES: dict = {}  # fichier → spectre de Jarvis toutes les 30 ms (pour reconnaître SON écho dans le micro)
 
 # ── Ce que Jarvis vient de dire : si le micro le « réentend », ce n'est pas vous qui parlez ──
 from collections import deque as _deque
@@ -121,22 +122,34 @@ def enveloppe(fichier) -> Optional[list]:
             a = a[::n]
         pas = max(1, int(taux * ENV_PAS))
         env = [math.sqrt(sum((v / 32768) ** 2 for v in a[i:i + pas]) / pas) for i in range(0, len(a) - pas, pas)]
+        if taux == TAUX:
+            try:
+                import numpy as np
+
+                x = np.frombuffer(a.tobytes(), dtype="int16")
+                _SPECTRES[str(fichier)] = np.array([spectre(x[i:i + pas]) for i in range(0, len(x) - pas, pas)],
+                                                   dtype="float32")
+            except Exception:  # noqa: BLE001
+                pass
     finally:
         if wav != fichier:
             wav.unlink(missing_ok=True)
     _ENVS[str(fichier)] = env
     if len(_ENVS) > 80:
+        _SPECTRES.pop(next(iter(_ENVS)), None)
         _ENVS.pop(next(iter(_ENVS)))
     return env
 
 
 def lecture_commence(fichier, position: float = 0.0) -> None:
-    LECTURE.update(env=_ENVS.get(str(fichier)), t0=time.monotonic() - position, actif=True)
+    cle = str(fichier)
+    LECTURE.update(env=_ENVS.get(cle), spectres=_SPECTRES.get(cle), fichier=cle,
+                   t0=time.monotonic() - position, actif=True)
     if LECTURE["env"] is None:
         def calc():
             env = enveloppe(fichier)
-            if LECTURE["actif"]:
-                LECTURE["env"] = env
+            if LECTURE["actif"] and LECTURE.get("fichier") == cle:
+                LECTURE.update(env=env, spectres=_SPECTRES.get(cle))
         threading.Thread(target=calc, daemon=True).start()
 
 
@@ -166,14 +179,15 @@ def _correlation(a, b) -> float:
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(va * vb)
 
 
-def apprendre_echo(hist, env):
+def apprendre_echo(hist, env, decalage: Optional[int] = None):
     """Décalage (en pas de 30 ms) et gain entre ce que Jarvis dit et ce que le micro entend."""
-    meilleur, decalage = -2.0, 2
-    for d in range(0, 16):
-        paires = [(r, env[p - d]) for p, r in hist if 0 <= p - d < len(env)]
-        c = _correlation([x for x, _ in paires], [y for _, y in paires])
-        if c > meilleur:
-            meilleur, decalage = c, d
+    if decalage is None:
+        meilleur, decalage = -2.0, 2
+        for d in range(0, 16):
+            paires = [(r, env[p - d]) for p, r in hist if 0 <= p - d < len(env)]
+            c = _correlation([x for x, _ in paires], [y for _, y in paires])
+            if c > meilleur:
+                meilleur, decalage = c, d
     ratios = []
     for p, r in hist:
         seg = env[max(0, p - decalage - 1):max(0, p - decalage + 2)]
@@ -190,6 +204,11 @@ SEUIL_VOIX = .45  # « voisement » minimum : une voix humaine (cordes vocales) 
 def voisement(b) -> float:
     """0..1 : à quel point ce bout de son ressemble à une VOIX (vibration périodique entre 70 et 400 Hz).
     Les bruits — clavier, porte, vaisselle, claquement, souffle — ne sont pas périodiques et restent bas."""
+    return analyser_voix(b)[0]
+
+
+def analyser_voix(b) -> tuple:
+    """(score de voix 0..1, période de la voix en échantillons — sa « note » —, 0 si inconnue)."""
     try:
         import numpy as np
 
@@ -198,7 +217,7 @@ def voisement(b) -> float:
         n = len(x)
         e = float(np.dot(x, x))
         if n < 240 or e <= 1e-9:
-            return 0.0
+            return 0.0, 0
         spectre = np.fft.rfft(x, 2 * n)
         ac = np.fft.irfft(spectre * np.conj(spectre))[:n]
         cumul = np.cumsum(x * x)
@@ -210,13 +229,50 @@ def voisement(b) -> float:
         i_p = bas - 1 + int(np.argmax(norme[bas - 1:]))
         p = float(norme[i_p])
         if float(norme[:i_p].min()) > .2:
-            return min(p, .2)  # pas de creux avant la « période » : grondement grave, souffle, pas une voix
+            return min(p, .2), 0  # pas de creux avant la « période » : grondement grave, souffle, pas une voix
         z = int(np.argmax(norme < 0)) if (norme < 0).any() else i_p
         if z < bas - 1 and float(norme[z:bas - 1].max(initial=0.0)) > p - .03:
-            return min(p, .3)  # son périodique très aigu (tintement, sifflement, bip) : pas une voix
-        return max(0.0, min(1.0, p))
+            return min(p, .3), 0  # son périodique très aigu (tintement, sifflement, bip) : pas une voix
+        return max(0.0, min(1.0, p)), i_p + 1
     except Exception:  # noqa: BLE001
-        return 1.0  # sans numpy : on ne filtre pas
+        return 1.0, 0  # sans numpy : on ne filtre pas
+
+
+_FENETRE_SPECTRE = None
+BANDE = slice(3, 129)  # 94 Hz – 4 kHz : là où sont les harmoniques de la voix
+
+
+def spectre(b):
+    """Amplitude du spectre d'un bloc de 30 ms (257 fréquences, pas de 31 Hz)."""
+    import numpy as np
+
+    global _FENETRE_SPECTRE
+    x = np.asarray(b, dtype="float32")
+    if _FENETRE_SPECTRE is None or len(_FENETRE_SPECTRE) != len(x):
+        _FENETRE_SPECTRE = np.hanning(len(x)).astype("float32")
+    return np.abs(np.fft.rfft(x * _FENETRE_SPECTRE, 512)).astype("float32")
+
+
+def retard_par_spectre(hist_spectres, spectres, maxi: int = 12):
+    """Retard (en pas de 30 ms) entre ce que Jarvis dit et ce que le micro en entend : celui pour lequel
+    le spectre entendu ressemble le plus au spectre prononcé (bien plus sûr que le seul volume)."""
+    import numpy as np
+
+    meilleur, retard = -1.0, None
+    for d in range(0, maxi + 1):
+        sims = []
+        for p, m in hist_spectres:
+            q = p - d
+            if 0 <= q < len(spectres):
+                r = spectres[q][BANDE]
+                mb = m[BANDE]
+                n = float(np.linalg.norm(r) * np.linalg.norm(mb))
+                if n > 0 and r.max() > 1:
+                    sims.append(float(np.dot(np.log1p(r), np.log1p(mb)) /
+                                      (np.linalg.norm(np.log1p(r)) * np.linalg.norm(np.log1p(mb)) + 1e-9)))
+        if len(sims) >= 10 and float(np.mean(sims)) > meilleur + .005:
+            meilleur, retard = float(np.mean(sims)), d
+    return retard
 
 
 def _rms(b) -> float:
@@ -249,6 +305,7 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
         calib, bruit, maxi = [], 0.0, 0.0
         echo, fort = deque(maxlen=50), 0  # mode interruption : niveau de la voix de Jarvis captée par le micro
         hist, echo_appris, fond = [], None, 0.003
+        hist_spectres = []
         recents = deque(maxlen=9)  # 5 instants « voix » sur les 270 dernières ms
         with sd.InputStream(samplerate=TAUX, channels=1, blocksize=BLOC, dtype="int16") as flux:
             while True:
@@ -274,13 +331,17 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                             fond = .95 * fond + .05 * min(rms, fond * 3 + 1e-4)
                         else:
                             env, pos = etat
+                            spectres = LECTURE.get("spectres")
                             if echo_appris is None:
                                 hist.append((pos, rms))
+                                if spectres is not None:
+                                    hist_spectres.append((pos, spectre(b)))
                                 actifs = sum(1 for p, _ in hist if 0 <= p < len(env) and env[p] > .02)
                                 if actifs < 30:
                                     fort = 0
                                     continue  # ≈ 1 s pour apprendre l'écho de la pièce
-                                echo_appris = apprendre_echo(hist, env)
+                                d = retard_par_spectre(hist_spectres, spectres) if spectres is not None and hist_spectres else None
+                                echo_appris = apprendre_echo(hist, env, d)
                             decalage, gain = echo_appris
                             seg = env[max(0, pos - decalage - 1):max(0, pos - decalage + 2)]
                             ref = max(seg) if seg else 0.0
@@ -294,7 +355,11 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                         r0 = sorted(echo)[int(len(echo) * .9)] if len(echo) >= 10 else 1.0
                         seuil_i, n_fort = max(0.03 / max(.3, sensibilite), r0 * 2.3 / max(.3, sensibilite)), 6
                     # il faut que ce soit FORT et que ce soit une VOIX : les bruits ne le coupent plus
-                    recents.append(rms > seuil_i and voisement(b) >= SEUIL_VOIX)
+                    voix = False
+                    if rms > seuil_i:
+                        score, note = analyser_voix(b)
+                        voix = score >= SEUIL_VOIX
+                    recents.append(voix)
                     fort = sum(recents)
                     if fort >= n_fort:
                         parle, bruit = True, max(fond, rms * .25)

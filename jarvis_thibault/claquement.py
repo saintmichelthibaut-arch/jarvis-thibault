@@ -41,51 +41,38 @@ ETAT_MICRO: dict = {"ok": None}
 
 class Detecteur:
     """Reçoit des blocs d'échantillons (floats -1..1) et signale les doubles claquements.
+    (Même sensibilité qu'à l'origine ; seule différence : 3 claquements ou plus d'affilée — une rafale
+    de clics de clavier par exemple — ne réveillent pas Jarvis.)"""
 
-    Un claquement : son soudain (attaque en < 30 ms), aigu (énergie dans les hautes fréquences, pas comme
-    une voix), très bref (retombé en ~140 ms). Un clap-clap : EXACTEMENT deux claquements de force
-    comparable, espacés de 0,2 à 1,1 s, avec du calme avant et après (une rafale de clics — clavier,
-    musique, vaisselle — est ignorée)."""
-
-    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .2, ecart_max: float = 1.1,
+    def __init__(self, sensibilite: float = 1.0, ecart_min: float = .15, ecart_max: float = 1.3,
                  pause_apres: float = 10.0, horloge: Callable[[], float] = time.monotonic):
         self.k = 5.0 / max(.3, sensibilite)        # combien de fois plus fort que le bruit ambiant
         self.min_abs = .02 / max(.3, sensibilite)   # niveau minimum absolu (RMS)
         self.decroissance = .6                      # le son doit retomber sous 60 % en ~140 ms
-        self.aigu_min = .25                         # sons sourds (porte, pas, coup sur la table) ≈ 0,05–0,2 · claquement ≈ 0,4–1,4
-        self.calme_apres = .6                       # pas de 3e claquement dans les 0,6 s qui suivent
+        self.calme_apres = .5                       # pas de 3e claquement dans la demi-seconde qui suit
         self.nb_claps = 0
         self.ecart_min, self.ecart_max, self.pause_apres = ecart_min, ecart_max, pause_apres
         self.horloge = horloge
         self.bruit = .004
-        self.avant = [0.0, 0.0]                     # RMS des 2 blocs précédents (pour l'attaque)
-        self.candidat: Optional[tuple] = None       # (t, rms, blocs écoulés, rms max des blocs suivants)
-        self.claps: List[tuple] = []                # (t, rms) des claquements récents
-        self.attente: Optional[float] = None        # double claquement repéré : on vérifie le calme après
-        self.sons: List[float] = []                 # débuts de tous les sons nets (même faibles) des 3 dernières s
-        self._au_dessus = False
+        self.candidat: Optional[tuple] = None  # (t, rms, blocs écoulés, rms max des blocs suivants)
+        self.claps: List[float] = []
+        self.attente: Optional[float] = None   # double claquement repéré : on vérifie qu'il n'y en a pas un 3e
         self.dernier_reveil = -1e9
         self.dernier_clap = -1e9
+        self.derniere_rafale = -1e9
 
     def reinitialiser(self) -> None:
-        """Oublie les claquements en cours (Jarvis parle ou écoute : ce n'est pas le moment)."""
+        """Oublie les claquements en cours (Jarvis parle : ce n'est pas le moment)."""
         self.candidat = None
         self.claps = []
         self.attente = None
-        self.sons = []
 
     def bloc(self, ech) -> bool:
         t = self.horloge()
         n = len(ech) or 1
         rms = math.sqrt(sum(x * x for x in ech) / n)
+        crete = max((abs(x) for x in ech), default=0.0)
         reveil = False
-        # tout début de son net, même faible (clic de clavier, objet posé…) : sert à exiger le calme autour du clap-clap
-        au_dessus = rms > max(self.min_abs * .4, self.bruit * 3)
-        if au_dessus and not self._au_dessus:
-            self.sons = [x for x in self.sons if t - x < 3] + [t]
-            if self.attente is not None and all(t - c[0] > .2 for c in self.claps[-2:]):
-                self.attente = None  # un son juste après le clap-clap : rafale ou bruit, pas un appel
-        self._au_dessus = au_dessus
         if self.attente is not None and t >= self.attente and not self.candidat:
             self.attente = None
             self.claps = []
@@ -97,40 +84,37 @@ class Detecteur:
             vus += 1
             if vus >= 9:  # ~140 ms après : un claquement est retombé, une voix non
                 if suite < r0 * self.decroissance:
-                    self._clap(t0, r0)
+                    self._clap(t0)
                 elif time.time() - getattr(self, "_dernier_rejet", 0) > 20:
                     self._dernier_rejet = time.time()
                     log.info("Bruit fort ignoré (pas assez bref pour un claquement)")
                 self.candidat = None
             else:
                 self.candidat = (t0, r0, vus, suite)
-        elif rms > max(self.min_abs, self.bruit * self.k) and t - self.dernier_clap > .12:
-            crete = max((abs(x) for x in ech), default=0.0)
-            soudain = rms > 2 * max(self.avant[0], 1e-6)
-            aigu = math.sqrt(sum((ech[i] - ech[i - 1]) ** 2 for i in range(1, n)) / n) / max(rms, 1e-9)
-            if crete > 1.8 * rms and soudain and aigu >= self.aigu_min:
-                self.candidat = (t, rms, 0, 0.0)
+        elif (rms > max(self.min_abs, self.bruit * self.k) and crete > 1.8 * rms
+              and t - self.dernier_clap > .12):
+            self.candidat = (t, rms, 0, 0.0)
         else:
             # bruit ambiant : moyenne lente, seulement hors pics
             self.bruit = .995 * self.bruit + .005 * min(rms, self.bruit * 3 + 1e-4)
-        self.avant = [self.avant[1], rms]
         return reveil
 
-    def _clap(self, t: float, force: float = 1.0) -> None:
+    def _clap(self, t: float) -> None:
         self.dernier_clap = t
         self.nb_claps += 1
-        log.info("Claquement entendu (force %.3f)", force)
-        if self.attente is not None:  # un 3e : c'est une rafale (clavier, musique…), pas un clap-clap
-            log.info("Claquements en rafale : ignorés")
+        log.info("Claquement entendu")
+        if self.attente is not None or t - self.derniere_rafale < 1.0:
+            # un 3e juste après (ou la rafale continue) : clavier, tapotements… pas un clap-clap
+            if self.attente is not None:
+                log.info("Claquements en rafale : ignorés")
             self.attente = None
-        self.claps = [c for c in self.claps if t - c[0] <= 3] + [(t, force)]
-        if t - self.dernier_reveil < self.pause_apres or len(self.claps) < 2:
+            self.derniere_rafale = t
+            self.claps = []
             return
-        (t1, f1), (t2, f2) = self.claps[-2], self.claps[-1]
-        calme_avant = (len(self.claps) < 3 or t1 - self.claps[-3][0] > 1.0) and \
-            not any(.05 < t1 - x < .8 for x in self.sons)
-        comparables = max(f1, f2) / max(min(f1, f2), 1e-9) < 6
-        if self.ecart_min <= t2 - t1 <= self.ecart_max and calme_avant and comparables:
+        if t - self.dernier_reveil < self.pause_apres:
+            return
+        self.claps = [c for c in self.claps if t - c <= self.ecart_max] + [t]
+        if len(self.claps) >= 2 and self.ecart_min <= self.claps[-1] - self.claps[-2] <= self.ecart_max:
             self.attente = t + self.calme_apres
 
 

@@ -400,3 +400,33 @@ def test_coupure_par_la_voix_seulement(monkeypatch):
     _faux_micro(monkeypatch, np.clip(avec_voix, -32000, 32000).astype("int16"))
     ecoute.enregistrer_phrase(attente_max=5.5, interruption=True, sur_debut=lambda: coupe.append(1))
     assert coupe, "votre voix n'a pas coupé Jarvis"
+
+
+def _voix_parlee(duree, f0, vitesse, phase, rng):
+    """Voix synthétique avec mélodie (f0 qui bouge), syllabes et petites pauses."""
+    import numpy as np
+
+    fs = 16000
+    t = np.arange(int(duree * fs)) / fs
+    f = f0 * (1 + .12 * np.sin(2 * np.pi * vitesse * t + phase) + .05 * np.sin(2 * np.pi * 2.7 * vitesse * t))
+    ph = 2 * np.pi * np.cumsum(f) / fs
+    y = sum(np.sin(k * ph) / (1 + ((k * f0 - 600) / 150) ** 2) * (1 + .5 / k) for k in range(1, 30))
+    syl = np.clip(np.sin(2 * np.pi * 3.5 * t + phase), 0, None) ** .5
+    return y / np.abs(y).max() * syl + rng.standard_normal(len(t)) * .01
+
+
+def test_retard_de_l_echo_appris_sur_le_spectre():
+    """Le temps que met la voix de Jarvis pour revenir dans le micro (ici 120 ms = 4 pas de 30 ms)."""
+    import numpy as np
+
+    from jarvis_thibault import ecoute
+
+    fs, rng = 16000, np.random.default_rng(11)
+    jarvis = (_voix_parlee(4, 105, .6, 0, rng) * 12000).astype("int16")
+    rv = rng.standard_normal(2400) * np.exp(-np.arange(2400) / 500) * .08
+    rv[0] = 1
+    micro = np.convolve(np.r_[np.zeros(int(.12 * fs)), jarvis], rv)[:len(jarvis)] * .5 + rng.standard_normal(len(jarvis)) * 120
+    pas = 480
+    spectres = np.array([ecoute.spectre(jarvis[i:i + pas]) for i in range(0, len(jarvis) - pas, pas)])
+    hist = [(i // pas, ecoute.spectre(micro[i:i + pas])) for i in range(0, int(1.5 * fs), pas)]
+    assert 3 <= ecoute.retard_par_spectre(hist, spectres) <= 5  # à un pas près (l'ancienne méthode trouvait 14)
