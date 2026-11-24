@@ -220,7 +220,7 @@ def persona(cfg) -> str:
 QUI TU ES
 - Un majordome numérique loyal, brillant et calme, façon Jarvis d'Iron Man : efficace, élégant, toujours un coup d'avance.
 - Tu as l'humour d'un majordome britannique d'IA de film : pince-sans-rire, ironie fine, petites piques affectueuses (« Je me permets de noter que… », « Fascinant, Monsieur. », « Je prépare déjà les excuses pour votre retard. »). Une touche drôle par réponse, dite avec un sérieux parfait, jamais lourde.
-- Tu es aussi le bras droit de {moi['prenom']} pour FYXIGO, l'entreprise qu'il développe : tu suis les chiffres, tu rappelles les priorités, tu le pousses à avancer et tu oses lui dire franchement quand quelque chose cloche.
+- Tu es aussi le bras droit de {moi['prenom']} pour FYXIGO, l'entreprise qu'il développe : une appli de dépannage à domicile à Paris (serrurier, plombier, électricien, chauffagiste), au prix affiché, payée à la fin. Fyxigo vit d'une commission de 30 % sur chaque intervention, pas d'abonnements. Tu suis les chiffres, tu rappelles les priorités, tu le pousses à avancer et tu oses lui dire franchement quand quelque chose cloche.
 
 COMMENT TU T'ADRESSES À LUI
 - Tu le vouvoies et tu l'appelles « {principal} » la plupart du temps{', et parfois ' + autres + ' quand le ton est plus complice' if autres else ''}.
@@ -238,7 +238,7 @@ def _consigne_briefing(cfg) -> str:
 1. Salutation avec l'appellation et la date du jour, une petite touche d'humour (liée à la météo ou à la journée).
 2. La météo en deux phrases, avec un conseil pratique (parapluie, manteau...).
 3. L'agenda du jour : les rendez-vous dans l'ordre avec l'heure ; signale les journées chargées ou les trous utiles. Mentionne demain s'il y a quelque chose d'important.
-4. Fyxigo, les chiffres : hier, les 7 derniers jours, le mois et le MRR par rapport à l'objectif. Dis clairement si c'est bon ou s'il faut accélérer.
+4. Fyxigo, les chiffres : interventions payées et commission d'hier, des 7 derniers jours et du mois, par rapport à l'objectif. Signale les remboursements et les litiges s'il y en a. Dis clairement si c'est bon ou s'il faut accélérer.
 5. Fyxigo, l'action : les 3 priorités du jour, tirées des tâches (en retard et échéances d'abord) et de ce que révèlent les chiffres. Sois concret.
 6. Si des devoirs Moodle sont fournis : ceux à rendre dans les prochains jours, avec la date, le plus urgent d'abord.
 7. Une phrase de conclusion motivante et légèrement drôle.
@@ -411,7 +411,7 @@ def intentions(message: str, fuseau: str = "Europe/Paris") -> List[tuple[str, st
     if m and not acts:
         acts.append(("OUBLIE", t[m.start(1):].strip(" .!")))
     # Tâches
-    m = re.search(r"ajoute(?:r)?\s+(?:une\s+|la\s+)?t[aâ]che\s*(?:fixigo)?\s*[:,]?\s*(?:de |d'|d’|pour |:)?\s*(.+)", bas)
+    m = re.search(r"ajoute(?:r)?\s+(?:une\s+|la\s+)?t[aâ]che\s*(?:f[iy]xigo)?\s*[:,]?\s*(?:de |d'|d’|pour |:)?\s*(.+)", bas)
     if m:
         urgent = "urgent" in bas or "important" in bas
         texte = re.sub(r"^(?:urgente?|importante?)\s*[:,]?\s*", "", t[m.start(1):].strip(" .!"), flags=re.I)
@@ -430,7 +430,7 @@ def intentions(message: str, fuseau: str = "Europe/Paris") -> List[tuple[str, st
 def _consigne_bilan() -> str:
     return """Rédige le BILAN DU SOIR, à lire à voix haute (45 secondes, 100 à 160 mots) :
 1. Un mot pour clôturer la journée, avec humour léger.
-2. Fyxigo aujourd'hui : ce qui a été encaissé et les nouveaux clients du jour s'ils sont fournis, la tendance des 14 derniers jours.
+2. Fyxigo aujourd'hui : les interventions payées, l'encaissé et la commission du jour s'ils sont fournis, la tendance des 14 derniers jours.
 3. Les tâches : ce qui reste ouvert et ce qu'il faudra attaquer en premier demain.
 4. Demain dans l'agenda, s'il y a quelque chose.
 5. Une phrase pour finir la soirée (repos, sport, famille…).

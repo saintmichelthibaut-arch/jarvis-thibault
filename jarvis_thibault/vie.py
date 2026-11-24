@@ -212,8 +212,11 @@ class VeilleStripe:
             self.vus.add(p["id"])
             nouveau = True
             montant = f"{p['montant']:.2f}".replace(".00", "").replace(".", ",")
-            self.ev.publier("paiement", "Nouveau paiement", f"+{montant} €", "stripe",
-                            dire=f"Ka-tching, {appel} : {montant} euros viennent de tomber.")
+            taux = float(cfg["fixigo"].get("commission", .30) or .30)
+            com = f"{p['montant'] * taux:.2f}".replace(".00", "").replace(".", ",")
+            self.ev.publier("paiement", "Intervention payée", f"+{montant} € · commission {com} €", "stripe",
+                            dire=f"Ka-tching, {appel} : une intervention de {montant} euros vient d'être payée, "
+                                 f"{com} euros de commission pour Fyxigo.")
         for p in n["echecs"]:
             if p["id"] in self.vus:
                 continue

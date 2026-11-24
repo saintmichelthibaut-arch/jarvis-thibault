@@ -9,8 +9,8 @@ from typing import Any, Dict, List
 from ..config import DOSSIER
 
 _TACHES_DEMO = """# Objectifs
-- Atteindre 5 000 € de MRR avant fin mars
-- 40 nouveaux artisans inscrits par mois
+- 3 000 € de commission par mois avant fin mars
+- 3 artisans vérifiés par métier dans le 11e
 
 # À faire
 - [ ] !!! Relancer les 3 artisans en attente de validation @{hier}

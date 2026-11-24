@@ -313,7 +313,7 @@ const PANNEAUX=(function(){const ids={semaine:"p-semaine",hier:"p-hier",moodle:"
     if(!epingle&&duree)minut[n]=setTimeout(()=>cacher(n),duree)}
   function cacher(n){if(epingle)return;const e=el(n);if(!e)return;e.classList.remove("visible");minut[n]=setTimeout(()=>e.classList.remove("ouvert"),420)}
   function selon(t){t=(t||"").toLowerCase();const r=new Set();
-    if(/encaiss|chiffre|stripe|mrr|client|vente|revenu|argent|€|euro|fixigo|business|paiement|abonn/.test(t)){r.add("semaine");r.add("hier")}
+    if(/encaiss|chiffre|stripe|mrr|commission|intervention|client|vente|revenu|argent|€|euro|f[iy]xigo|business|paiement|panier|rembours|litige|abonn/.test(t)){r.add("semaine");r.add("hier")}
     if(/agenda|rendez|rdv|programme|planning|réunion|reunion|journée|journee|après-midi|apres-midi|ce soir|ce matin/.test(t))r.add("agenda");
     if(/tâche|tache|priorit|à faire|a faire|todo|objectif/.test(t))r.add("priorites");
     if(/devoir|moodle|cours|rendre|examen|quiz|école|ecole|partiel|\bfac\b|prof|exam/.test(t))r.add("moodle");
