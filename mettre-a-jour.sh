@@ -26,6 +26,17 @@ EOF
 if ! grep -q "demarrer-app.sh" "$HOME/Applications/Jarvis.app/Contents/MacOS/Jarvis" 2>/dev/null; then NOUVELLE_APP=1; fi
 bash "$ICI/installer-veille.sh"
 bash "$JH/app/lancer.sh"
+# Vérification : c'est bien la nouvelle version qui tourne, avec le nouveau design
+sleep 2
+ATT=$(cat "$JH/app/version" 2>/dev/null)
+EN_COURS=$(curl -s -m 3 http://127.0.0.1:8765/api/version | sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p')
+if [[ "$EN_COURS" == "$ATT" ]] && curl -s -m 3 http://127.0.0.1:8765/ | grep -q "ORBE — noir pur"; then
+  echo "✓ Nouvelle version active (ORBE · V.$ATT, affichée en bas à droite de l'écran)."
+else
+  echo "✗ L'ancienne version tourne encore ($EN_COURS au lieu de $ATT) : nouvelle tentative…"
+  bash "$JH/app/lancer.sh" --redemarrer; sleep 2
+  curl -s -m 3 http://127.0.0.1:8765/api/version
+fi
 echo "✓ Jarvis est à jour, Monsieur."
 if [[ "${NOUVELLE_APP:-}" == "1" ]]; then
   echo ""

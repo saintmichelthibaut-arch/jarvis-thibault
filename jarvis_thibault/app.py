@@ -51,7 +51,7 @@ def main() -> int:
     drapeau.unlink(missing_ok=True)
     etat = {"plein": bool(ecran.get("plein_ecran", False)) or reveil}
     fenetre = webview.create_window(
-        "J.A.R.V.I.S.", url + "?app=1",
+        "J.A.R.V.I.S.", url + f"?app=1&v={int(time.time())}",
         width=1600, height=1000, min_size=(900, 620),
         background_color="#01030b", text_select=False,
         fullscreen=etat["plein"],

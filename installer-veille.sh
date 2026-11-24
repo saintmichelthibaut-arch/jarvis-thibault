@@ -5,7 +5,7 @@ ICI="$(cd "$(dirname "$0")" && pwd)"
 JH="${JARVIS_HOME:-$HOME/.jarvis}"
 mkdir -p "$JH/app" "$HOME/Applications"
 cp "$ICI/lancer.sh" "$ICI/demarrer-app.sh" "$JH/app/" && chmod +x "$JH/app/lancer.sh" "$JH/app/demarrer-app.sh"
-date +%s > "$JH/app/version"
+date +%d.%m-%H%M > "$JH/app/version"
 [[ "$(uname)" == "Darwin" ]] || { bash "$JH/app/lancer.sh" --redemarrer; exit 0; }
 bash "$ICI/creer-app.sh"
 # l'ancien démarrage par « élément d'ouverture » est remplacé par la veille

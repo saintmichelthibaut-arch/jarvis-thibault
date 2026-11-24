@@ -127,7 +127,7 @@ def _rms(b) -> float:
         return math.sqrt(sum((int(v) / 32768) ** 2 for v in b) / len(b))
 
 
-def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.0, duree_max: float = 15.0,
+def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree_max: float = 15.0,
                        sur_niveau: Optional[Callable[[float], None]] = None, journal: Optional[dict] = None,
                        interruption: bool = False, sur_debut: Optional[Callable[[], None]] = None,
                        sensibilite: float = 1.0) -> Optional[bytes]:

@@ -232,9 +232,21 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             threading.Thread(target=ecouter, args=(cfg, etat.ev), daemon=True).start()
     threading.Thread(target=etat.rafraichir, daemon=True).start()
 
+    version_lancee = ((cfg.dossier / "app" / "version").read_text().strip()
+                      if (cfg.dossier / "app" / "version").exists() else "dev")
+    SANS_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"}
+
+    @app.middleware("http")
+    async def pas_de_cache(request, call_next):
+        rep = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            rep.headers.update(SANS_CACHE)
+        return rep
+
     @app.get("/", response_class=HTMLResponse)
     def accueil():
-        return (STATIC / "index.html").read_text(encoding="utf-8")
+        page = (STATIC / "index.html").read_text(encoding="utf-8")
+        return HTMLResponse(page.replace("__VERSION_JARVIS__", version_lancee), headers=SANS_CACHE)
 
     @app.get("/api/etat")
     def api_etat(rafraichir: bool = False):
@@ -257,8 +269,6 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             "demo": cfg.demo,
         }
 
-    version_lancee = ((cfg.dossier / "app" / "version").read_text().strip()
-                      if (cfg.dossier / "app" / "version").exists() else "dev")
 
     @app.get("/api/version")
     def api_version():
