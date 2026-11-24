@@ -178,9 +178,30 @@ def parle_sur_le_mac() -> bool:
 def jouer(fichier: Path, attendre: bool = False) -> None:
     """Joue un fichier audio sur les haut-parleurs du Mac (sans navigateur).
     Pendant la lecture, Jarvis sait qu'il parle : le clap-clap ne réagit pas à sa propre voix."""
+    from . import ecoute, son_mac
+
+    if son_mac.actif():  # par le moteur avec annulation d'écho : il ne s'entend pas lui-même
+        try:
+            num = son_mac.MOTEUR.jouer(Path(fichier))
+            _AFPLAY["n"] += 1
+            ecoute.lecture_commence(fichier)
+
+            def attendre_moteur():
+                t0 = _time.monotonic()
+                while son_mac.MOTEUR.id == num and not son_mac.MOTEUR.fini and _time.monotonic() - t0 < 300:
+                    _time.sleep(.05)
+                _AFPLAY["n"] -= 1
+                _AFPLAY["fin"] = _time.monotonic()
+
+            if attendre:
+                attendre_moteur()
+            else:
+                _threading.Thread(target=attendre_moteur, daemon=True).start()
+            return
+        except Exception:  # noqa: BLE001
+            pass  # on retombe sur afplay
     if not (platform.system() == "Darwin" and shutil.which("afplay")):
         return
-    from . import ecoute
 
     p = subprocess.Popen(["afplay", str(fichier)])
     _AFPLAY["n"] += 1

@@ -368,7 +368,19 @@ function parlerNavigateur(texte){const st=sousTitres(texte);st.a(0);return new P
   const t0=Date.now(),duree=Math.max(2,texte.length/14)*1000;const tm=setInterval(()=>st.a(Math.min(1,(Date.now()-t0)/duree)),250);
   u.onboundary=e=>{if(e.charIndex!=null)st.a(e.charIndex/texte.length)};
   const fin=()=>{if(finCourante===fin)finCourante=null;clearInterval(tm);st.fin();res()};finCourante=fin;u.onend=fin;u.onerror=fin;statut("parole");ORBE.forcer=.55;speechSynthesis.speak(u)}).then(()=>{ORBE.forcer=0;statut("veille")})}
-function jouer(url,texte){if(!url)return parlerNavigateur(texte);preparerAudio();
+/* Voix jouée par le Mac lui-même (annulation d'écho : Jarvis ne s'entend pas, vous pouvez le couper) */
+const VOIX_MAC=()=>!!(ETAT&&ETAT.son_mac&&DANS_APP);
+const post=(u,c)=>fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c||{})});
+function pauseVoix(){if(VOIX_MAC())post("/api/son/pause").catch(()=>{});else try{lecteur&&lecteur.pause()}catch(e){}}
+function reprendreVoix(){if(VOIX_MAC())post("/api/son/reprendre").catch(()=>{});else if(lecteur&&lecteur.src)lecteur.play().catch(()=>{})}
+function jouerMac(url,texte){const st=sousTitres(texte);st.a(0);statut("parole");
+  return new Promise(res=>{let num=null,fini=false,iv=null;
+    const fin=()=>{if(fini)return;fini=true;clearInterval(iv);if(finCourante===fin)finCourante=null;ORBE.niveauMac=0;st.fin();statut("veille");res()};
+    finCourante=fin;
+    post("/api/son/jouer",{audio:url}).then(r=>r.json()).then(j=>{if(!j.ok){fin();return}num=j.id}).catch(fin);
+    iv=setInterval(async()=>{if(num===null)return;try{const e=await(await fetch("/api/son/etat")).json();
+      if(e.id!==num||e.fini)return fin();ORBE.niveauMac=e.pause?0:(e.niveau||0);if(e.duree)st.a(e.position/e.duree)}catch(_){}} ,90)})}
+function jouer(url,texte){if(!url)return parlerNavigateur(texte);if(VOIX_MAC())return jouerMac(url,texte);preparerAudio();
   const st=sousTitres(texte);st.a(0);
   const signal=(a,pos)=>fetch("/api/lecture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:a,position:pos||0})}).catch(()=>{});
   return new Promise(res=>{const fin=()=>{if(finCourante===fin)finCourante=null;lecteur.onended=lecteur.onerror=lecteur.ontimeupdate=lecteur.onplaying=null;signal(null);st.fin();statut("veille");res()};finCourante=fin;
@@ -387,7 +399,7 @@ async function lireFlux(rep,surLigne){const lec=rep.body.getReader(),dec=new Tex
     while((i=buf.indexOf("\n"))>=0){const l=buf.slice(0,i).trim();buf=buf.slice(i+1);if(l)try{surLigne(JSON.parse(l))}catch(e){}}}}
 let conversation=false,jeton=0,finCourante=null,guetEnCours=null,ctrlParler=null;
 const MOTS_FIN=/^(merci( beaucoup)?|c'est tout|c’est tout|ça ira|ca ira|stop|rien|au revoir|bonne nuit|à plus|a plus|laisse tomber)\b/i;
-function couperVoix(){try{lecteur&&lecteur.pause()}catch(e){}try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}if(finCourante){const f=finCourante;finCourante=null;f()}}
+function couperVoix(){try{lecteur&&lecteur.pause()}catch(e){}if(VOIX_MAC())post("/api/son/stop").catch(()=>{});try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}if(finCourante){const f=finCourante;finCourante=null;f()}}
 async function ecouteFlux(interruption,surParole){let res={texte:"",erreur:null};
   try{const r=await fetch("/api/ecoute_flux?interruption="+(interruption?1:0),{method:"POST"});
     await lireFlux(r,o=>{if(o.type==="parole"&&surParole)surParole();else if(o.type==="texte")res.texte=o.texte||"";else if(o.type==="erreur")res.erreur=o.erreur})}
@@ -403,7 +415,7 @@ async function demander(q){if(!q||!q.trim())return;
      - vous avez vraiment dit quelque chose → il abandonne sa réponse et vous répond ;
      - fausse alerte (un bruit, sa propre voix) → il reprend exactement là où il s'était arrêté. */
   const surParole=()=>{if(!actif()||suspens)return;suspens=new Promise(r=>reprendre=r);
-    try{lecteur&&lecteur.pause()}catch(e){}
+    pauseVoix();
     fetch("/api/lecture",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({audio:null})}).catch(()=>{});
     statut("ecoute");transcript("je vous écoute…");suivreNiveau(true)};
   const guetter=()=>{if(!DANS_APP||!conversation||guetEnCours||!actif())return;const g=guetEnCours=ecouteFlux(true,surParole);
@@ -411,7 +423,7 @@ async function demander(q){if(!q||!q.trim())return;
       if(!actif()){r();return}
       suivreNiveau(false);
       if(res.texte){texteCoupe=res.texte;jeton++;couperVoix();if(ctrlParler)ctrlParler.abort();r();return}
-      statut("parole");transcript(q);if(finCourante&&lecteur&&lecteur.src)lecteur.play().catch(()=>{});r();guetter()})};
+      statut("parole");transcript(q);if(finCourante)reprendreVoix();r();guetter()})};
   ctrlParler=new AbortController();
   try{const r=await fetch("/api/parler_flux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:q,historique}),signal:ctrlParler.signal});
     if(!r.ok)throw new Error("erreur "+r.status);
@@ -472,7 +484,8 @@ const PALETTES={veille:[[.47,.80,1],[.12,.30,.95],[.80,.92,1]],ecoute:[[.55,.90,
 const pal=[[.47,.80,1],[.12,.30,.95],[.80,.92,1]];
 function majNiveau(t){let cible={veille:.06,ecoute:.3,reflexion:.4,briefing:.36,parole:.3}[ORBE.mode]??.06;
   if(ORBE.mode==="ecoute")cible=.18+Math.min(.8,(MIC.niveau||0)*9);
-  if(ORBE.analyseur&&ORBE.mode==="parole"){ORBE.analyseur.getByteFrequencyData(spec);let s=0;for(let i=2;i<60;i++)s+=spec[i];cible=.12+s/58/255*1.5}
+  if(VOIX_MAC()&&ORBE.mode==="parole")cible=.12+Math.min(1.2,(ORBE.niveauMac||0)*7);
+  else if(ORBE.analyseur&&ORBE.mode==="parole"){ORBE.analyseur.getByteFrequencyData(spec);let s=0;for(let i=2;i<60;i++)s+=spec[i];cible=.12+s/58/255*1.5}
   if(ORBE.forcer)cible=Math.max(cible,ORBE.forcer*(.55+.45*Math.abs(Math.sin(t*.009)*Math.sin(t*.0047))));
   ORBE.niveau+=(cible-ORBE.niveau)*.1;const P=PALETTES[ORBE.mode]||PALETTES.veille;for(let i=0;i<3;i++)for(let j=0;j<3;j++)pal[i][j]+=(P[i][j]-pal[i][j])*.04}
 

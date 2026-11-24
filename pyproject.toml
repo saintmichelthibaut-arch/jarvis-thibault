@@ -19,6 +19,7 @@ dependencies = [
     "pywebview>=5.0; sys_platform == 'darwin'",
     "sounddevice>=0.4.6; sys_platform == 'darwin'",
     "numpy>=1.26; sys_platform == 'darwin'",
+    "pyobjc-framework-AVFoundation>=10; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]

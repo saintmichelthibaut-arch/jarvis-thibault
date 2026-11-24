@@ -21,6 +21,7 @@ _abonnes: List["queue.Queue"] = []
 _verrou = threading.Lock()
 _fil = None
 ETAT = {"ouvert": False, "erreur": None, "nom": ""}
+EXTERNE = {"oui": False}  # le son arrive du moteur audio macOS (annulation d'écho) au lieu de sounddevice
 _SILENCE = {"dit": 0.0}
 
 
@@ -75,16 +76,34 @@ def _micro_voulu(sd) -> tuple:
     return i, (appareils[i]["name"] if i is not None else "micro par défaut")
 
 
+def utiliser_source_externe() -> None:
+    """Le micro arrive désormais par pousser() (moteur audio avec annulation d'écho)."""
+    EXTERNE["oui"] = True
+    ETAT.update(ouvert=True, erreur=None, nom="micro avec annulation d'écho (macOS)")
+
+
+def pousser(bloc) -> None:
+    """Distribue des échantillons (float32, 16 kHz) à tous les utilisateurs du micro."""
+    for i in range(0, len(bloc), MORCEAU):
+        morceau = bloc[i:i + MORCEAU]
+        with _verrou:
+            for q in list(_abonnes):
+                try:
+                    q.put_nowait(morceau)
+                except queue.Full:
+                    pass
+
+
 def _boucle() -> None:
     import sounddevice as sd
 
-    while True:
+    while not EXTERNE["oui"]:
         try:
             index, nom = _micro_voulu(sd)
             with sd.InputStream(device=index, samplerate=TAUX, channels=1, blocksize=MORCEAU, dtype="float32") as flux:
                 ETAT.update(ouvert=True, erreur=None, nom=nom)
                 log.info("Micro ouvert (écoute partagée) : %s", nom)
-                while True:
+                while not EXTERNE["oui"]:
                     donnees, _ = flux.read(MORCEAU)
                     bloc = donnees[:, 0].copy()
                     with _verrou:
@@ -106,6 +125,8 @@ def _boucle() -> None:
 
 def _demarrer() -> None:
     global _fil
+    if EXTERNE["oui"]:
+        return
     with _verrou:
         if _fil is None or not _fil.is_alive():
             _fil = threading.Thread(target=_boucle, daemon=True, name="micro")

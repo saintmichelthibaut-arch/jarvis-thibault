@@ -430,3 +430,41 @@ def test_retard_de_l_echo_appris_sur_le_spectre():
     spectres = np.array([ecoute.spectre(jarvis[i:i + pas]) for i in range(0, len(jarvis) - pas, pas)])
     hist = [(i // pas, ecoute.spectre(micro[i:i + pas])) for i in range(0, int(1.5 * fs), pas)]
     assert 3 <= ecoute.retard_par_spectre(hist, spectres) <= 5  # à un pas près (l'ancienne méthode trouvait 14)
+
+
+def test_micro_du_moteur_mac_converti_en_16_khz(monkeypatch):
+    """Le micro macOS (48 kHz, par paquets) arrive à Jarvis en 16 kHz, sans trou ni décalage."""
+    import numpy as np
+
+    from jarvis_thibault import micro, son_mac
+
+    monkeypatch.setitem(micro.EXTERNE, "oui", True)
+
+    class Canal:
+        def __init__(self, x):
+            self.x = x
+
+        def as_buffer(self, n):
+            return self.x.tobytes()[:n]
+
+    class Tampon:
+        def __init__(self, x):
+            self.x = x
+
+        def frameLength(self):
+            return len(self.x)
+
+        def floatChannelData(self):
+            return [Canal(self.x)]
+
+    m = son_mac.Moteur()
+    m.taux_micro = 48000.0
+    t = np.arange(48000) / 48000
+    signal = (.5 * np.sin(2 * np.pi * 440 * t)).astype("float32")
+    with micro.InputStream(dtype="float32") as flux:
+        for i in range(0, len(signal), 1024):  # paquets de taille quelconque
+            m._micro(Tampon(signal[i:i + 1024]), None)
+        recu = np.concatenate([flux.read(160)[0][:, 0] for _ in range(99)])
+    assert len(recu) == 15840
+    attendu = .5 * np.sin(2 * np.pi * 440 * np.arange(len(recu)) / 16000)
+    assert np.abs(recu[100:-100] - attendu[100:-100]).max() < .03  # même son, même rythme

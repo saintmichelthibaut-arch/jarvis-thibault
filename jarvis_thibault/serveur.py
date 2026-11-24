@@ -177,6 +177,11 @@ class Message(BaseModel):
     voix: bool = True
 
 
+class Lecture(BaseModel):
+    audio: Optional[str] = None
+    position: float = 0.0
+
+
 class Texte(BaseModel):
     texte: str
 
@@ -226,6 +231,10 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
         threading.Thread(target=_planificateur, args=(etat,), daemon=True).start()
         import platform
 
+        if platform.system() == "Darwin" and not cfg.demo:
+            from . import son_mac
+
+            son_mac.demarrer(cfg)  # voix + micro avec annulation d'écho (avant le clap-clap : même micro)
         if cfg["claquement"].get("actif") and platform.system() == "Darwin" and not cfg.demo:
             from .claquement import ecouter
 
@@ -266,6 +275,7 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             "transcription": bool(cfg.secret("openai_api_key")),
             "dernier_evenement": etat.ev.dernier_id,
             "micro": __import__("jarvis_thibault.claquement", fromlist=["x"]).ETAT_MICRO.get("ok"),
+            "son_mac": __import__("jarvis_thibault.son_mac", fromlist=["x"]).actif(),
             "demo": cfg.demo,
         }
 
@@ -466,10 +476,6 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
 
         return StreamingResponse(flux(), media_type="application/x-ndjson")
 
-    class Lecture(BaseModel):
-        audio: Optional[str] = None
-        position: float = 0.0
-
     @app.post("/api/lecture")
     def api_lecture(lec: Lecture):
         """L'écran signale ce qu'il joue, pour que Jarvis reconnaisse son propre écho dans le micro."""
@@ -480,6 +486,47 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
         else:
             ecoute.lecture_fin()
         return {"ok": True}
+
+    # ── Voix jouée par le Mac lui-même (annulation d'écho) : la fenêtre pilote ──
+    @app.post("/api/son/jouer")
+    def api_son_jouer(lec: Lecture):
+        from . import ecoute, son_mac
+
+        if not son_mac.actif() or not lec.audio:
+            return {"ok": False}
+        f = voix.dossier_audio(cfg) / Path(lec.audio.split("?")[0]).name
+        if not f.exists():
+            return {"ok": False, "erreur": "fichier introuvable"}
+        try:
+            num = son_mac.MOTEUR.jouer(f, lec.position)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Son : lecture impossible : %s", exc)
+            return {"ok": False, "erreur": str(exc)[:200]}
+        ecoute.lecture_commence(f, lec.position)
+        threading.Thread(target=ecoute.enveloppe, args=(f,), daemon=True).start()  # niveau pour l'animation
+        return {"ok": True, "id": num}
+
+    @app.post("/api/son/{action}")
+    def api_son_action(action: str):
+        from . import ecoute, son_mac
+
+        if not son_mac.actif():
+            return {"ok": False}
+        if action == "pause":
+            son_mac.MOTEUR.pause()
+            ecoute.lecture_fin()
+        elif action == "reprendre":
+            son_mac.MOTEUR.reprendre()
+        elif action == "stop":
+            son_mac.MOTEUR.arreter()
+            ecoute.lecture_fin()
+        return {"ok": True}
+
+    @app.get("/api/son/etat")
+    def api_son_etat():
+        from . import son_mac
+
+        return son_mac.MOTEUR.etat() if son_mac.actif() else {"fini": True, "id": -1}
 
     @app.post("/api/reveil")
     def api_reveil():

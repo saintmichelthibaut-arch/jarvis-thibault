@@ -153,6 +153,15 @@ def lecture_commence(fichier, position: float = 0.0) -> None:
         threading.Thread(target=calc, daemon=True).start()
 
 
+def _echo_annule() -> bool:
+    try:
+        from . import micro
+
+        return bool(micro.EXTERNE["oui"])
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def lecture_fin() -> None:
     LECTURE.update(actif=False, fin=time.monotonic())
 
@@ -324,7 +333,7 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                 if interruption and not parle:
                     # Jarvis parle : on compare le micro, instant par instant, à ce que Jarvis est en train de dire
                     trames = (trames + [bytes(b)])[-12:]
-                    etat = lecture_etat()
+                    etat = 0 if _echo_annule() else lecture_etat()  # écho retiré par macOS : écoute simple
                     if etat is not None:
                         if etat == 0:
                             ref = 0.0
