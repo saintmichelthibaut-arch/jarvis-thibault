@@ -139,16 +139,27 @@ _REVEIL = threading.Lock()
 
 def _occupe() -> Optional[str]:
     """Raison de ne PAS écouter les claquements en ce moment (sinon None).
-    Sa propre voix (« À votre service… ») ou la vôtre pendant une conversation ne doivent jamais le réveiller."""
-    from . import ecoute
+    Fenêtre fermée, seule la voix jouée directement par le Mac (salut, briefing) compte : rien ne peut
+    rester « bloqué » par une fenêtre fermée au milieu d'une phrase."""
+    from . import voix
 
-    if ecoute.LECTURE.get("actif") or time.monotonic() - ecoute.LECTURE.get("fin", -1e9) < 2.5:
-        return "Jarvis parle"
-    if ecoute.VERROU.locked():
-        return "Jarvis vous écoute"
     if _REVEIL.locked():
         return "réveil en cours"
+    if voix.parle_sur_le_mac():
+        return "Jarvis parle"
+    if fenetre_ouverte_cache():
+        return "fenêtre ouverte"
     return None
+
+
+_FENETRE = {"t": -1e9, "ouverte": False}
+
+
+def fenetre_ouverte_cache() -> bool:
+    """fenetre_ouverte(), vérifiée au plus une fois par seconde."""
+    if time.monotonic() - _FENETRE["t"] > 1.0:
+        _FENETRE.update(t=time.monotonic(), ouverte=fenetre_ouverte())
+    return _FENETRE["ouverte"]
 
 
 def fenetre_ouverte() -> bool:
@@ -228,6 +239,7 @@ def ecouter(cfg, ev=None) -> None:
         log.info("Réveil par claquement indisponible (%s)", exc)
         return
     det = Detecteur(float(cfg["claquement"].get("sensibilite", 1.0) or 1.0))
+    occupe_avant: Optional[str] = None
     log.info("Réveil par claquement de mains : à l'écoute")
     while True:
         try:
@@ -255,14 +267,19 @@ def ecouter(cfg, ev=None) -> None:
                                 break  # on réessaie dans 30 s (au cas où l'accès vient d'être donné)
                             ETAT_MICRO["ok"] = True
                             log.info("Micro : OK (niveau max %.3f sur 8 s)", maxi)
-                    if _occupe():
+                    raison = _occupe()
+                    if raison:
+                        if raison != occupe_avant:
+                            log.info("Clap-clap en pause : %s", raison)
+                        occupe_avant = raison
                         det.reinitialiser()
                         continue
+                    if occupe_avant:
+                        log.info("Clap-clap : de nouveau à l'écoute")
+                        occupe_avant = None
                     if det.bloc(donnees[:, 0].tolist()):
-                        if fenetre_ouverte():
-                            log.info("Double claquement : fenêtre déjà ouverte → ignoré")
-                            continue
                         log.info("Double claquement détecté")
+                        _FENETRE["t"] = -1e9
                         reveiller(cfg, ev)
         except Exception as exc:  # noqa: BLE001
             ETAT_MICRO["ok"] = False

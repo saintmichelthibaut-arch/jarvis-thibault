@@ -494,6 +494,8 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
         from . import ecoute
 
         ecoute.ANNULER.set()
+        ecoute.DERNIER_STOP["t"] = time.monotonic()
+        ecoute.lecture_fin()
         return {"ok": True}
 
     @app.get("/api/niveau_micro")

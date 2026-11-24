@@ -276,14 +276,20 @@ def test_echo_de_jarvis_ignore():
 def test_clap_ignore_quand_jarvis_parle_ou_ecoute():
     import time as _t
 
-    from jarvis_thibault import claquement, ecoute
+    from jarvis_thibault import claquement, ecoute, voix
 
-    ecoute.LECTURE.update(actif=True)
+    claquement._FENETRE.update(t=_t.monotonic() + 1e6, ouverte=False)   # fenêtre fermée
+    voix._AFPLAY.update(n=1)
     assert claquement._occupe() == "Jarvis parle"
-    ecoute.LECTURE.update(actif=False, fin=_t.monotonic())
+    voix._AFPLAY.update(n=0, fin=_t.monotonic())
     assert claquement._occupe() == "Jarvis parle"           # juste après avoir parlé (écho de la pièce)
-    ecoute.LECTURE.update(fin=_t.monotonic() - 10)
+    voix._AFPLAY.update(fin=_t.monotonic() - 10)
     assert claquement._occupe() is None
+    # fenêtre fermée au milieu d'une phrase ou d'une écoute : le clap-clap N'EST PAS bloqué
+    ecoute.LECTURE.update(actif=True)
     with ecoute.VERROU:
-        assert claquement._occupe() == "Jarvis vous écoute"
-    assert claquement._occupe() is None
+        assert claquement._occupe() is None
+    ecoute.LECTURE.update(actif=False)
+    claquement._FENETRE.update(ouverte=True)
+    assert claquement._occupe() == "fenêtre ouverte"
+    claquement._FENETRE.update(t=-1e9, ouverte=False)

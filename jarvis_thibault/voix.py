@@ -167,6 +167,14 @@ def synthetiser(cfg, texte: str, nom: Optional[str] = None) -> Optional[Path]:
     return None
 
 
+_AFPLAY = {"n": 0, "fin": -1e9}
+
+
+def parle_sur_le_mac() -> bool:
+    """Vrai pendant qu'une phrase est jouée directement par le Mac (et 2,5 s après, le temps de l'écho)."""
+    return _AFPLAY["n"] > 0 or _time.monotonic() - _AFPLAY["fin"] < 2.5
+
+
 def jouer(fichier: Path, attendre: bool = False) -> None:
     """Joue un fichier audio sur les haut-parleurs du Mac (sans navigateur).
     Pendant la lecture, Jarvis sait qu'il parle : le clap-clap ne réagit pas à sa propre voix."""
@@ -175,10 +183,16 @@ def jouer(fichier: Path, attendre: bool = False) -> None:
     from . import ecoute
 
     p = subprocess.Popen(["afplay", str(fichier)])
+    _AFPLAY["n"] += 1
     ecoute.lecture_commence(fichier)
 
     def attendre_fin():
-        p.wait()
+        try:
+            p.wait(timeout=300)
+        except Exception:  # noqa: BLE001
+            p.kill()
+        _AFPLAY["n"] -= 1
+        _AFPLAY["fin"] = _time.monotonic()
         ecoute.lecture_fin()
 
     if attendre:

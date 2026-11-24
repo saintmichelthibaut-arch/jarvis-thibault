@@ -33,6 +33,7 @@ BLOC = 480  # 30 ms
 VERROU = threading.Lock()
 niveau_actuel = {"v": 0.0}
 ANNULER = threading.Event()
+DERNIER_STOP = {"t": -1e9}  # fenêtre fermée / écoute arrêtée : une écoute qui démarre juste après est annulée aussi
 ENV_PAS = BLOC / TAUX  # 30 ms
 LECTURE: dict = {"env": None, "t0": 0.0, "actif": False, "fin": 0.0}
 _ENVS: dict = {}
@@ -204,6 +205,9 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
     from collections import deque
 
     j = journal if journal is not None else {}
+    if interruption and time.monotonic() - DERNIER_STOP["t"] < .3:
+        j.update(annule=True, maxi=1.0, parle=False)
+        return None
     with VERROU:
         ANNULER.clear()
         trames, parle, silence, debut = [], False, 0.0, time.monotonic()
