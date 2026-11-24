@@ -239,7 +239,7 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                 silence = silence + BLOC / TAUX if rms < seuil * 0.8 else 0.0
                 if silence >= silence_fin or ecoule > duree_max:
                     break
-    if maxi < 0.015:  # rien d'assez fort pour être une voix : on n'envoie pas du silence à la transcription
+    if maxi < 0.010:  # rien d'assez fort pour être une voix : on n'envoie pas du silence à la transcription
         j.update(bruit=bruit, maxi=maxi, seuil=seuil, parle=False)
         niveau_actuel["v"] = 0.0
         return None
