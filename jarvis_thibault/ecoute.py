@@ -219,7 +219,7 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                     trames.append(bytes(b))
                     bruit = sorted(calib)[len(calib) // 2]
                     continue
-                seuil = max(0.0025, bruit * 2.2)
+                seuil = max(0.008, bruit * 2.2)  # plancher fixe : le silence d'une pièce calme ne compte pas comme parole
                 if interruption:
                     seuil = max(seuil, bruit * 1.2)
                 if not parle:
@@ -239,6 +239,10 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                 silence = silence + BLOC / TAUX if rms < seuil * 0.8 else 0.0
                 if silence >= silence_fin or ecoule > duree_max:
                     break
+    if maxi < 0.015:  # rien d'assez fort pour être une voix : on n'envoie pas du silence à la transcription
+        j.update(bruit=bruit, maxi=maxi, seuil=seuil, parle=False)
+        niveau_actuel["v"] = 0.0
+        return None
     j.update(bruit=bruit, maxi=maxi, seuil=seuil, parle=True)
     niveau_actuel["v"] = 0.0
     tampon = io.BytesIO()
