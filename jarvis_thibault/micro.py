@@ -20,7 +20,53 @@ MORCEAU = 160  # 10 ms
 _abonnes: List["queue.Queue"] = []
 _verrou = threading.Lock()
 _fil = None
-ETAT = {"ouvert": False, "erreur": None}
+ETAT = {"ouvert": False, "erreur": None, "nom": ""}
+_SILENCE = {"dit": 0.0}
+
+
+INTEGRE = ("macbook", "built-in", "intégré", "integre", "internal")
+A_EVITER = ("iphone", "ipad", "continuity", "teams", "zoom", "blackhole", "loopback", "soundflower",
+            "aggregate", "agrégé", "virtual", "virtuel", "krisp", "airpods")
+
+
+def choisir_micro(appareils: list, defaut: int = -1, prefere: str = "") -> int | None:
+    """Index du micro à utiliser :
+    1. celui nommé dans la config ([ecoute] micro = "…"), s'il est branché ;
+    2. sinon le micro intégré du MacBook — TOUJOURS, même si macOS bascule le micro par défaut
+       sur l'iPhone (Continuité), des AirPods ou un faux micro (Teams, Zoom…) ;
+    3. sinon le micro par défaut, s'il n'est pas un de ceux-là ; sinon le premier micro réel."""
+    entrees = [(i, str(a.get("name", ""))) for i, a in enumerate(appareils) if a.get("max_input_channels", 0) > 0]
+    if prefere:
+        for i, nom in entrees:
+            if prefere.lower() in nom.lower():
+                return i
+    for i, nom in entrees:
+        if any(m in nom.lower() for m in INTEGRE) and not any(m in nom.lower() for m in A_EVITER):
+            return i
+    noms = dict(entrees)
+    if defaut in noms and not any(m in noms[defaut].lower() for m in A_EVITER):
+        return defaut
+    for i, nom in entrees:
+        if not any(m in nom.lower() for m in A_EVITER):
+            return i
+    return None
+
+
+def _micro_voulu(sd) -> tuple:
+    prefere = ""
+    try:
+        from .config import charger
+
+        prefere = str(charger()["ecoute"].get("micro", "") or "")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        defaut = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device
+    except Exception:  # noqa: BLE001
+        defaut = -1
+    appareils = [dict(a) for a in sd.query_devices()]
+    i = choisir_micro(appareils, int(defaut if defaut is not None else -1), prefere)
+    return i, (appareils[i]["name"] if i is not None else "micro par défaut")
 
 
 def _boucle() -> None:
@@ -28,9 +74,10 @@ def _boucle() -> None:
 
     while True:
         try:
-            with sd.InputStream(samplerate=TAUX, channels=1, blocksize=MORCEAU, dtype="float32") as flux:
-                ETAT.update(ouvert=True, erreur=None)
-                log.info("Micro ouvert (écoute partagée)")
+            index, nom = _micro_voulu(sd)
+            with sd.InputStream(device=index, samplerate=TAUX, channels=1, blocksize=MORCEAU, dtype="float32") as flux:
+                ETAT.update(ouvert=True, erreur=None, nom=nom)
+                log.info("Micro ouvert (écoute partagée) : %s", nom)
                 while True:
                     donnees, _ = flux.read(MORCEAU)
                     bloc = donnees[:, 0].copy()
@@ -44,6 +91,11 @@ def _boucle() -> None:
             ETAT.update(ouvert=False, erreur=str(exc)[:200])
             log.warning("Micro indisponible : %s — nouvel essai dans 5 s", exc)
             time.sleep(5)
+            try:  # micro débranché / changé : on relit la liste des micros avant de réessayer
+                sd._terminate()
+                sd._initialize()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _demarrer() -> None:
@@ -86,6 +138,9 @@ class InputStream:
                 b = self.q.get(timeout=2)
             except queue.Empty:
                 b = np.zeros(MORCEAU, dtype="float32")  # micro coupé : du silence plutôt qu'un blocage
+                if time.time() - _SILENCE["dit"] > 600:
+                    _SILENCE["dit"] = time.time()
+                    log.warning("Micro : plus aucun son reçu depuis 2 s (micro débranché ou bloqué ?)")
             morceaux.append(b)
             total += len(b)
         tout = np.concatenate(morceaux)

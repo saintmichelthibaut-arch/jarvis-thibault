@@ -293,3 +293,17 @@ def test_clap_ignore_quand_jarvis_parle_ou_ecoute():
     claquement._FENETRE.update(ouverte=True)
     assert claquement._occupe() == "fenêtre ouverte"
     claquement._FENETRE.update(t=-1e9, ouverte=False)
+
+
+def test_choix_du_micro():
+    from jarvis_thibault.micro import choisir_micro
+
+    A = [{"name": "Micro de l'iPhone de Thibault", "max_input_channels": 1},
+         {"name": "Microphone MacBook Air", "max_input_channels": 1},
+         {"name": "Haut-parleurs MacBook Air", "max_input_channels": 0},
+         {"name": "Microsoft Teams Audio", "max_input_channels": 2}]
+    assert choisir_micro(A, defaut=0) == 1                 # macOS a basculé sur l'iPhone → micro du MacBook
+    assert choisir_micro(A, defaut=3) == 1                 # faux micro Teams → micro du MacBook
+    assert choisir_micro(A, defaut=0, prefere="iphone") == 0   # choisi exprès dans la config
+    B = [{"name": "Micro de l'iPhone", "max_input_channels": 1}, {"name": "Yeti USB", "max_input_channels": 1}]
+    assert choisir_micro(B, defaut=0) == 1                 # pas de MacBook (Mac de bureau) : micro réel

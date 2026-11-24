@@ -94,6 +94,7 @@ actif = true             # clap-clap : ouvre Jarvis en plein écran, même fenê
 sensibilite = 1.0        # plus haut = plus sensible (ex. 1.5) · plus bas = moins (ex. 0.7)
 
 [ecoute]
+micro = ""                       # vide = micro du MacBook (jamais l'iPhone, les AirPods ou Teams) · ou un nom, ex. "Yeti"
 interruption_sensibilite = 1.0   # pour couper Jarvis en parlant : plus haut = plus facile (ex. 1.5), plus bas = moins (ex. 0.7)
 
 [serveur]
