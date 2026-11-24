@@ -60,12 +60,18 @@ def _micro_voulu(sd) -> tuple:
         prefere = str(charger()["ecoute"].get("micro", "") or "")
     except Exception:  # noqa: BLE001
         pass
+    defaut = -1
     try:
-        defaut = sd.default.device[0] if isinstance(sd.default.device, (list, tuple)) else sd.default.device
+        d = sd.default.device  # paire (entrée, sortie) : sounddevice._InputOutputPair, indexable
+        try:
+            d = d[0]
+        except (TypeError, IndexError, KeyError):
+            pass
+        defaut = int(d) if d is not None else -1
     except Exception:  # noqa: BLE001
         defaut = -1
     appareils = [dict(a) for a in sd.query_devices()]
-    i = choisir_micro(appareils, int(defaut if defaut is not None else -1), prefere)
+    i = choisir_micro(appareils, defaut, prefere)
     return i, (appareils[i]["name"] if i is not None else "micro par défaut")
 
 

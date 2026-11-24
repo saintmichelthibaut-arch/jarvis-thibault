@@ -307,3 +307,24 @@ def test_choix_du_micro():
     assert choisir_micro(A, defaut=0, prefere="iphone") == 0   # choisi exprès dans la config
     B = [{"name": "Micro de l'iPhone", "max_input_channels": 1}, {"name": "Yeti USB", "max_input_channels": 1}]
     assert choisir_micro(B, defaut=0) == 1                 # pas de MacBook (Mac de bureau) : micro réel
+
+
+def test_micro_voulu_avec_le_vrai_format_de_sounddevice():
+    """sd.default.device est une paire (entrée, sortie) qui n'est ni une liste ni un tuple."""
+    import types
+
+    from jarvis_thibault import micro
+
+    class Paire:  # comme sounddevice._InputOutputPair
+        def __init__(self, e, s):
+            self._p = [e, s]
+
+        def __getitem__(self, i):
+            return self._p[i]
+
+    appareils = [{"name": "Micro de l'iPhone", "max_input_channels": 1},
+                 {"name": "Microphone MacBook Air", "max_input_channels": 1},
+                 {"name": "Haut-parleurs MacBook Air", "max_input_channels": 0}]
+    for defaut in (Paire(0, 2), [0, 2], 0, None, Paire(None, 2)):
+        sd = types.SimpleNamespace(default=types.SimpleNamespace(device=defaut), query_devices=lambda: appareils)
+        assert micro._micro_voulu(sd) == (1, "Microphone MacBook Air")
