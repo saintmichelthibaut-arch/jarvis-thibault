@@ -19,6 +19,7 @@ cat > "$PL" <<PLIST
   <key>Label</key><string>com.thibault.jarvis.veille</string>
   <key>ProgramArguments</key><array><string>/bin/bash</string><string>$JH/app/lancer.sh</string><string>--silencieux</string></array>
   <key>RunAtLoad</key><true/>
+  <key>AbandonProcessGroup</key><true/>
   <key>StartInterval</key><integer>60</integer>
   <key>StandardOutPath</key><string>$JH/veille.log</string>
   <key>StandardErrorPath</key><string>$JH/veille.log</string>

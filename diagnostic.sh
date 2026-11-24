@@ -13,7 +13,14 @@ echo ""
 echo "── Derniers messages ──"
 grep -E "Micro|laquement|Bruit fort|Réveil|Erreur|Error|Traceback|refusée|Écoute :|Entendu" "$JH/jarvis.log" 2>/dev/null | tail -12
 echo ""
-echo "── Test : faites clap-clap MAINTENANT (10 s) ──"
+echo "── Test 1 : ouverture de la fenêtre SANS claquer des mains (fermez Jarvis avant) ──"
+L0=$(wc -l < "$JH/jarvis.log" 2>/dev/null || echo 0)
+curl -s -m 3 -X POST $URL/api/reveil >/dev/null && sleep 9
+tail -n +$((L0+1)) "$JH/jarvis.log" 2>/dev/null | grep -E "Réveil" || echo "(aucune trace de réveil)"
+echo "→ La fenêtre s'est-elle ouverte ? Refermez-la pour le test 2."
+sleep 6
+echo ""
+echo "── Test 2 : faites clap-clap MAINTENANT (10 s) ──"
 L0=$(wc -l < "$JH/jarvis.log" 2>/dev/null || echo 0)
 sleep 10
-tail -n +$((L0+1)) "$JH/jarvis.log" 2>/dev/null | grep -E "laquement|Bruit fort|Micro" || echo "(aucun claquement entendu pendant le test)"
+tail -n +$((L0+1)) "$JH/jarvis.log" 2>/dev/null | grep -E "laquement|Bruit fort|Micro|Réveil" || echo "(aucun claquement entendu pendant le test)"

@@ -475,6 +475,14 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
             ecoute.lecture_fin()
         return {"ok": True}
 
+    @app.post("/api/reveil")
+    def api_reveil():
+        """Fait comme un clap-clap (pour tester l'ouverture sans claquer des mains)."""
+        from .claquement import reveiller
+
+        reveiller(cfg, etat.ev)
+        return {"ok": True}
+
     @app.post("/api/ecoute_stop")
     def api_ecoute_stop():
         from . import ecoute

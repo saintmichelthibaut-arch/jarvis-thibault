@@ -97,12 +97,46 @@ class Detecteur:
         return False
 
 
-def reveiller(cfg, ev=None) -> None:
-    """Ouvre l'app Jarvis en plein écran (ou la ramène devant) et salue."""
+def fenetre_ouverte() -> bool:
+    r = subprocess.run(["pgrep", "-f", "jarvis_thibault.cli app"], capture_output=True)
+    return r.returncode == 0
+
+
+def ouvrir_app(cfg) -> str:
+    """Ouvre la fenêtre de Jarvis en plein écran et VÉRIFIE qu'elle est bien là (sinon, autre méthode)."""
+    import sys
+
     (cfg.dossier / ".reveil").write_text(str(time.time()), encoding="utf-8")
+    if fenetre_ouverte():
+        log.info("Réveil : fenêtre déjà ouverte → mise au premier plan")
+        subprocess.run(["osascript", "-e", 'tell application "Jarvis" to activate'], capture_output=True, timeout=5)
+        return "deja"
     app = Path.home() / "Applications" / "Jarvis.app"
     if app.exists():
-        subprocess.Popen(["open", str(app)])
+        r = subprocess.run(["open", str(app)], capture_output=True, text=True, timeout=15)
+        log.info("Réveil : open Jarvis.app → code %s %s", r.returncode, (r.stderr or "").strip()[:200])
+        for _ in range(40):  # jusqu'à 8 s
+            if fenetre_ouverte():
+                log.info("Réveil : fenêtre ouverte ✓")
+                return "app"
+            time.sleep(.2)
+        log.warning("Réveil : l'app ne s'est pas ouverte avec « open » → lancement direct")
+    journal = open(cfg.dossier / "jarvis.log", "ab")  # noqa: SIM115
+    subprocess.Popen([sys.executable, "-m", "jarvis_thibault.cli", "app"], stdout=journal, stderr=journal,
+                     start_new_session=True)
+    for _ in range(40):
+        if fenetre_ouverte():
+            log.info("Réveil : fenêtre ouverte (lancement direct) ✓")
+            return "direct"
+        time.sleep(.2)
+    log.error("Réveil : impossible d'ouvrir la fenêtre de Jarvis")
+    return "echec"
+
+
+def reveiller(cfg, ev=None) -> None:
+    """Ouvre l'app Jarvis en plein écran (ou la ramène devant) et salue."""
+    log.info("Réveil demandé")
+    threading.Thread(target=ouvrir_app, args=(cfg,), daemon=True).start()
     appel = (cfg["moi"]["appellations"] or ["Monsieur"])[0]
     if ev is not None:
         ev.publier("reveil", "Réveil", "double claquement", "raison")
