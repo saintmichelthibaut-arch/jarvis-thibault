@@ -184,6 +184,41 @@ def apprendre_echo(hist, env):
     return decalage, gain
 
 
+SEUIL_VOIX = .45  # « voisement » minimum : une voix humaine (cordes vocales) ≈ 0,6–0,95 ; bruits, clics, claquements ≈ 0–0,35
+
+
+def voisement(b) -> float:
+    """0..1 : à quel point ce bout de son ressemble à une VOIX (vibration périodique entre 70 et 400 Hz).
+    Les bruits — clavier, porte, vaisselle, claquement, souffle — ne sont pas périodiques et restent bas."""
+    try:
+        import numpy as np
+
+        x = np.asarray(b, dtype="float32")
+        x = x - x.mean()
+        n = len(x)
+        e = float(np.dot(x, x))
+        if n < 240 or e <= 1e-9:
+            return 0.0
+        spectre = np.fft.rfft(x, 2 * n)
+        ac = np.fft.irfft(spectre * np.conj(spectre))[:n]
+        cumul = np.cumsum(x * x)
+        kmax = min(TAUX // 70, n - 120)
+        k = np.arange(1, kmax)
+        e1, e2 = cumul[n - k - 1], e - cumul[k - 1]
+        norme = np.where((e1 > 0) & (e2 > 0), ac[k] / np.sqrt(np.maximum(e1 * e2, 1e-18)), 0.0)  # norme[i] ↔ décalage i+1
+        bas = TAUX // 400  # 40 échantillons = 400 Hz
+        i_p = bas - 1 + int(np.argmax(norme[bas - 1:]))
+        p = float(norme[i_p])
+        if float(norme[:i_p].min()) > .2:
+            return min(p, .2)  # pas de creux avant la « période » : grondement grave, souffle, pas une voix
+        z = int(np.argmax(norme < 0)) if (norme < 0).any() else i_p
+        if z < bas - 1 and float(norme[z:bas - 1].max(initial=0.0)) > p - .03:
+            return min(p, .3)  # son périodique très aigu (tintement, sifflement, bip) : pas une voix
+        return max(0.0, min(1.0, p))
+    except Exception:  # noqa: BLE001
+        return 1.0  # sans numpy : on ne filtre pas
+
+
 def _rms(b) -> float:
     try:
         import numpy as np
@@ -257,9 +292,10 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                     else:
                         echo.append(rms)
                         r0 = sorted(echo)[int(len(echo) * .9)] if len(echo) >= 10 else 1.0
-                        seuil_i, n_fort = max(0.03 / max(.3, sensibilite), r0 * 2.3 / max(.3, sensibilite)), 7
-                    recents.append(rms > seuil_i)
-                    fort = sum(recents) if etat is not None else (fort + 1 if rms > seuil_i else 0)
+                        seuil_i, n_fort = max(0.03 / max(.3, sensibilite), r0 * 2.3 / max(.3, sensibilite)), 6
+                    # il faut que ce soit FORT et que ce soit une VOIX : les bruits ne le coupent plus
+                    recents.append(rms > seuil_i and voisement(b) >= SEUIL_VOIX)
+                    fort = sum(recents)
                     if fort >= n_fort:
                         parle, bruit = True, max(fond, rms * .25)
                         if sur_debut:

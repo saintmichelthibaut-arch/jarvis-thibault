@@ -328,3 +328,75 @@ def test_micro_voulu_avec_le_vrai_format_de_sounddevice():
     for defaut in (Paire(0, 2), [0, 2], 0, None, Paire(None, 2)):
         sd = types.SimpleNamespace(default=types.SimpleNamespace(device=defaut), query_devices=lambda: appareils)
         assert micro._micro_voulu(sd) == (1, "Microphone MacBook Air")
+
+
+def _faux_micro(monkeypatch, signal):
+    """Remplace le micro par un signal enregistré (int16, 16 kHz)."""
+    import sys
+    import types
+
+    import numpy as np
+
+    class Flux:
+        def __init__(self, **k):
+            self.i = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n):
+            b = signal[self.i:self.i + n]
+            if len(b) < n:
+                b = np.zeros(n, dtype="int16")
+            self.i += n
+            return b.reshape(-1, 1), False
+
+    faux = types.ModuleType("sounddevice")
+    faux.InputStream = Flux
+    monkeypatch.setitem(sys.modules, "sounddevice", faux)
+
+
+def _voix(duree, f0=115):
+    import numpy as np
+
+    rng = np.random.default_rng(5)
+    t = np.arange(int(duree * 16000)) / 16000
+    y = sum(np.sin(2 * np.pi * k * f0 * t) / (1 + ((k * f0 - 650) / 120) ** 2) for k in range(1, 30))
+    syllabes = .55 + .45 * np.sin(2 * np.pi * 4 * t) ** 2
+    return y / np.abs(y).max() * 9000 * syllabes + rng.standard_normal(len(t)) * 200
+
+
+def test_coupure_par_la_voix_seulement(monkeypatch):
+    """Pendant qu'il parle : les bruits (clavier, vaisselle, claquement) ne le coupent pas, votre voix si."""
+    import numpy as np
+
+    from jarvis_thibault import ecoute
+
+    fs = 16000
+    rng = np.random.default_rng(2)
+    fond = rng.standard_normal(fs * 6) * 150
+    bruits = fond.copy()
+    for t0 in np.arange(.8, 5.5, .23):  # clavier
+        i = int(t0 * fs)
+        bruits[i:i + 60] += rng.standard_normal(60) * 12000 * np.exp(-np.arange(60) / 10)
+    for t0 in (1.5, 3.1):  # vaisselle qui tinte, claquement
+        i = int(t0 * fs)
+        tt = np.arange(3000) / fs
+        bruits[i:i + 3000] += np.sin(2 * np.pi * 2800 * tt) * np.exp(-tt / .08) * 9000
+        bruits[i + 8000:i + 9000] += rng.standard_normal(1000) * 15000 * np.exp(-np.arange(1000) / 120)
+    ecoute.LECTURE.update(actif=False, fin=-1e9)
+    ecoute.DERNIER_STOP["t"] = -1e9
+
+    _faux_micro(monkeypatch, np.clip(bruits, -32000, 32000).astype("int16"))
+    coupe = []
+    ecoute.enregistrer_phrase(attente_max=5.5, interruption=True, sur_debut=lambda: coupe.append(1))
+    assert not coupe, "un bruit a coupé Jarvis"
+
+    avec_voix = bruits.copy()
+    avec_voix[int(2 * fs):int(3.5 * fs)] += _voix(1.5)
+    _faux_micro(monkeypatch, np.clip(avec_voix, -32000, 32000).astype("int16"))
+    ecoute.enregistrer_phrase(attente_max=5.5, interruption=True, sur_debut=lambda: coupe.append(1))
+    assert coupe, "votre voix n'a pas coupé Jarvis"
