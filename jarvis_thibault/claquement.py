@@ -147,7 +147,9 @@ def fenetre_ouverte_cache() -> bool:
 
 
 def fenetre_ouverte() -> bool:
-    r = subprocess.run(["pgrep", "-f", "jarvis_thibault.cli app"], capture_output=True)
+    # « [.] » : un autre pgrep lancé au même moment (clap-clap + annulation d'écho) ne se reconnaît pas
+    # lui-même comme la fenêtre (sa ligne de commande contient « [.] », pas « . »).
+    r = subprocess.run(["pgrep", "-f", "jarvis_thibault[.]cli app"], capture_output=True)
     return r.returncode == 0
 
 
