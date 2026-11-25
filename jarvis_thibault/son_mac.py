@@ -45,6 +45,9 @@ class Moteur:
             self.AVF = AVF
             self.moteur = AVF.AVAudioEngine.alloc().init()
             entree = self.moteur.inputNode()
+            # Le mélangeur principal (relié à la sortie) doit exister AVANT d'activer le traitement
+            # vocal, sinon macOS refuse de démarrer le moteur (erreur -10875, kAUInitialize).
+            self.moteur.mainMixerNode()
             ok, err = entree.setVoiceProcessingEnabled_error_(True, None)
             if not ok:
                 raise RuntimeError(f"traitement vocal refusé : {err}")
