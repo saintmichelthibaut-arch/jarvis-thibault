@@ -53,14 +53,20 @@ class Moteur:
                 entree.setVoiceProcessingOtherAudioDuckingConfiguration_(cfg(False, 10))  # 10 = niveau minimum
             except Exception:  # noqa: BLE001
                 pass
+            self.entree = entree
             self.lecteur = AVF.AVAudioPlayerNode.alloc().init()
-            self.reverb = AVF.AVAudioUnitReverb.alloc().init()
-            self.reverb.loadFactoryPreset_(AVF.AVAudioUnitReverbPresetSmallRoom)
-            self.reverb.setWetDryMix_(9.0)  # petite pièce métallique : la voix d'IA
             self.moteur.attachNode_(self.lecteur)
-            self.moteur.attachNode_(self.reverb)
-            self.moteur.connect_to_format_(self.reverb, self.moteur.mainMixerNode(), None)
-            self.moteur.connect_to_format_(self.lecteur, self.reverb, None)
+            self.sortie = self.moteur.mainMixerNode()
+            try:  # petite pièce métallique : la voix d'IA (facultatif)
+                rv = AVF.AVAudioUnitReverb.alloc().init()
+                rv.loadFactoryPreset_(AVF.AVAudioUnitReverbPresetSmallRoom)
+                rv.setWetDryMix_(9.0)
+                self.moteur.attachNode_(rv)
+                self.moteur.connect_to_format_(rv, self.moteur.mainMixerNode(), None)
+                self.sortie = rv
+            except Exception as exc:  # noqa: BLE001
+                log.info("Son : sans effet de pièce (%s)", exc)
+            self.moteur.connect_to_format_(self.lecteur, self.sortie, None)
 
             fmt = entree.outputFormatForBus_(0)
             self.taux_micro = float(fmt.sampleRate())
@@ -71,6 +77,7 @@ class Moteur:
                 raise RuntimeError(f"moteur audio : {err}")
             self.actif = True
             log.info("Son : annulation d'écho macOS ACTIVE (micro %.0f Hz)", self.taux_micro)
+            threading.Thread(target=self._surveiller_fenetre, daemon=True, name="son-fenetre").start()
             return True
         except Exception as exc:  # noqa: BLE001
             self.erreur = str(exc)[:300]
@@ -88,7 +95,11 @@ class Moteur:
             n = int(tampon.frameLength())
             if n <= 0:
                 return
-            x = np.frombuffer(tampon.floatChannelData()[0].as_buffer(n * 4), dtype=np.float32).copy()
+            canal = tampon.floatChannelData()[0]
+            x = np.frombuffer(canal.as_buffer(n), dtype=np.float32)
+            if len(x) < n:  # selon la version de pyobjc, la taille est en octets
+                x = np.frombuffer(canal.as_buffer(n * 4), dtype=np.float32)
+            x = x[:n].copy()
             if self._reste is not None and len(self._reste):
                 x = np.concatenate([self._reste, x])
             pas = self.taux_micro / TAUX
@@ -109,6 +120,28 @@ class Moteur:
                 self._err_t = time.time()
                 log.warning("Son : micro illisible (%s)", exc)
 
+    # ── fenêtre fermée : traitement vocal coupé (le micro brut entend mieux les claquements) ──
+    def traitement(self, actif: bool) -> None:
+        if getattr(self, "_traitement", None) == actif:
+            return
+        try:
+            self.entree.setVoiceProcessingBypassed_(not actif)
+            self._traitement = actif
+            log.info("Son : annulation d'écho %s", "active (fenêtre ouverte)" if actif else "en pause (fenêtre fermée)")
+        except Exception as exc:  # noqa: BLE001
+            log.info("Son : réglage du traitement vocal impossible (%s)", exc)
+            self._traitement = actif
+
+    def _surveiller_fenetre(self) -> None:
+        from .claquement import fenetre_ouverte_cache
+
+        while self.actif:
+            try:
+                self.traitement(fenetre_ouverte_cache() or not self.fini)
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(1.0)
+
     # ── voix ──
     def jouer(self, fichier: Path, position: float = 0.0) -> int:
         AVF = self.AVF
@@ -127,7 +160,7 @@ class Moteur:
             self.lecteur.stop()
             if self.format_lecteur is None or not self.format_lecteur.isEqual_(fmt):
                 self.moteur.disconnectNodeOutput_(self.lecteur)
-                self.moteur.connect_to_format_(self.lecteur, self.reverb, fmt)
+                self.moteur.connect_to_format_(self.lecteur, self.sortie, fmt)
                 self.format_lecteur = fmt
 
             def termine(*_):

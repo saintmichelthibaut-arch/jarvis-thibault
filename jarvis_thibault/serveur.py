@@ -129,13 +129,14 @@ def _planificateur(etat: Etat) -> None:
         try:
             now = datetime.now(ZoneInfo(cfg["moi"]["fuseau"]))
             jour = now.date().isoformat()
+            auto = bool(cfg["auto"].get("actif", False))  # sinon : briefing et bilan seulement sur demande
             # Briefing du matin
             bcfg = cfg["briefing"]
             dernier = cerveau.dernier_briefing(cfg, "briefing")
             if dernier and dernier["horodatage"][:10] == jour:
                 faits["briefing"] = jour
             h, m = lire_heure(bcfg["heure"])
-            if (faits.get("briefing") != jour and (now.hour, now.minute) >= (h, m) and now.hour < 12
+            if (auto and faits.get("briefing") != jour and (now.hour, now.minute) >= (h, m) and now.hour < 12
                     and _JOURS[now.weekday()] in bcfg["jours"]):
                 faits["briefing"] = jour
                 log.info("Briefing du matin…")
@@ -146,7 +147,7 @@ def _planificateur(etat: Etat) -> None:
                     ouvrir_ecran(cfg)
             # Bilan du soir
             soir = cfg["bilan"]
-            if soir.get("actif"):
+            if auto and soir.get("actif"):
                 dernier = cerveau.dernier_briefing(cfg, "bilan")
                 if dernier and dernier["horodatage"][:10] == jour:
                     faits["bilan"] = jour
@@ -226,6 +227,7 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
     etat = Etat(cfg)
     app = FastAPI(title="Jarvis")
     app.state.etat = etat
+    etat.ev.parler = bool(cfg["auto"].get("actif", False))
 
     if planifier:
         threading.Thread(target=_planificateur, args=(etat,), daemon=True).start()
@@ -369,13 +371,10 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
                         return None
                     try:
                         f = voix.synthetiser(cfg, p)
-                        if f:
-                            try:
-                                from . import ecoute as _ec
+                        if f:  # profil de la voix calculé à côté : la phrase part tout de suite
+                            from . import ecoute as _ec
 
-                                _ec.enveloppe(f)
-                            except Exception:  # noqa: BLE001
-                                pass
+                            threading.Thread(target=_ec.enveloppe, args=(f,), daemon=True).start()
                         return _url_audio(f)
                     except Exception as exc:  # noqa: BLE001
                         log.warning("Voix indisponible : %s", exc)
@@ -446,6 +445,7 @@ def creer_app(cfg: Optional[Config] = None, planifier: bool = True) -> FastAPI:
                 j: dict = {}
                 wav = ecoute.enregistrer_phrase(
                     attente_max=180.0 if interruption else 7.0, journal=j, interruption=bool(interruption),
+                    silence_fin=float(cfg["ecoute"].get("silence_fin", 1.5) or 1.5),
                     sur_debut=lambda: q.put({"type": "parole"}),
                     sensibilite=float(cfg["ecoute"].get("interruption_sensibilite", 1.0) or 1.0))
                 if not j.get("annule") and j.get("maxi", 1) < 1e-4:

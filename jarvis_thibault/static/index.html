@@ -377,7 +377,9 @@ function jouerMac(url,texte){const st=sousTitres(texte);st.a(0);statut("parole")
   return new Promise(res=>{let num=null,fini=false,iv=null;
     const fin=()=>{if(fini)return;fini=true;clearInterval(iv);if(finCourante===fin)finCourante=null;ORBE.niveauMac=0;st.fin();statut("veille");res()};
     finCourante=fin;
-    post("/api/son/jouer",{audio:url}).then(r=>r.json()).then(j=>{if(!j.ok){fin();return}num=j.id}).catch(fin);
+    const secours=()=>{if(fini)return;fini=true;clearInterval(iv);if(finCourante===fin)finCourante=null;  // le Mac n'a pas pu : la fenêtre joue la voix
+      if(ETAT)ETAT.son_mac=false;jouer(url,texte).then(res)};
+    post("/api/son/jouer",{audio:url}).then(r=>r.json()).then(j=>{if(!j.ok)return secours();num=j.id}).catch(secours);
     iv=setInterval(async()=>{if(num===null)return;try{const e=await(await fetch("/api/son/etat")).json();
       if(e.id!==num||e.fini)return fin();ORBE.niveauMac=e.pause?0:(e.niveau||0);if(e.duree)st.a(e.position/e.duree)}catch(_){}} ,90)})}
 function jouer(url,texte){if(!url)return parlerNavigateur(texte);if(VOIX_MAC())return jouerMac(url,texte);preparerAudio();

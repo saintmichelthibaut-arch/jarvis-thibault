@@ -121,7 +121,14 @@ def enveloppe(fichier) -> Optional[list]:
         if n > 1:
             a = a[::n]
         pas = max(1, int(taux * ENV_PAS))
-        env = [math.sqrt(sum((v / 32768) ** 2 for v in a[i:i + pas]) / pas) for i in range(0, len(a) - pas, pas)]
+        try:
+            import numpy as np
+
+            xs = np.frombuffer(a.tobytes(), dtype="int16").astype("float32") / 32768
+            nb = max(0, (len(xs) - 1) // pas)
+            env = [float(v) for v in np.sqrt((xs[:nb * pas].reshape(nb, pas) ** 2).mean(axis=1))] if nb else []
+        except Exception:  # noqa: BLE001
+            env = [math.sqrt(sum((v / 32768) ** 2 for v in a[i:i + pas]) / pas) for i in range(0, len(a) - pas, pas)]
         if taux == TAUX:
             try:
                 import numpy as np
@@ -294,7 +301,7 @@ def _rms(b) -> float:
         return math.sqrt(sum((int(v) / 32768) ** 2 for v in b) / len(b))
 
 
-def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree_max: float = 15.0,
+def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree_max: float = 40.0,
                        sur_niveau: Optional[Callable[[float], None]] = None, journal: Optional[dict] = None,
                        interruption: bool = False, sur_debut: Optional[Callable[[], None]] = None,
                        sensibilite: float = 1.0) -> Optional[bytes]:
@@ -371,7 +378,7 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                     recents.append(voix)
                     fort = sum(recents)
                     if fort >= n_fort:
-                        parle, bruit = True, max(fond, rms * .25)
+                        parle, bruit = True, max(fond, .004)  # le bruit de la PIÈCE, pas votre voix
                         if sur_debut:
                             sur_debut()
                     elif ecoule > attente_max:
@@ -381,7 +388,9 @@ def enregistrer_phrase(attente_max: float = 8.0, silence_fin: float = 1.5, duree
                 if len(calib) < 10:  # 0,3 s de calibrage
                     calib.append(rms)
                     trames.append(bytes(b))
-                    bruit = sorted(calib)[len(calib) // 2]
+                    # bruit de la pièce : les instants les plus calmes, plafonné — si vous parlez déjà,
+                    # votre voix n'est pas prise pour du bruit (sinon vos syllabes douces comptaient comme silence)
+                    bruit = min(sorted(calib)[len(calib) // 4], .012)
                     continue
                 seuil = max(0.008, bruit * 2.2)  # plancher fixe : le silence d'une pièce calme ne compte pas comme parole
                 if interruption:
@@ -438,7 +447,7 @@ def transcrire(cfg, wav: bytes) -> str:
 
 def ecouter_commande(cfg) -> str:
     j: dict = {}
-    wav = enregistrer_phrase(journal=j)
+    wav = enregistrer_phrase(journal=j, silence_fin=float(cfg["ecoute"].get("silence_fin", 1.5) or 1.5))
     log.info("Écoute : bruit %.4f · max %.4f · seuil %.4f · parole %s", j.get("bruit", 0), j.get("maxi", 0), j.get("seuil", 0), j.get("parle"))
     if j.get("maxi", 1) < 1e-4:
         raise PermissionError("le micro ne renvoie que du silence : macOS bloque le micro (Réglages Système → Confidentialité → Micro)")

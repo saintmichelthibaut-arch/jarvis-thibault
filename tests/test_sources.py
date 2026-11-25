@@ -444,8 +444,8 @@ def test_micro_du_moteur_mac_converti_en_16_khz(monkeypatch):
         def __init__(self, x):
             self.x = x
 
-        def as_buffer(self, n):
-            return self.x.tobytes()[:n]
+        def as_buffer(self, n):  # pyobjc : n éléments
+            return self.x[:n].tobytes()
 
     class Tampon:
         def __init__(self, x):
@@ -468,3 +468,35 @@ def test_micro_du_moteur_mac_converti_en_16_khz(monkeypatch):
     assert len(recu) == 15840
     attendu = .5 * np.sin(2 * np.pi * 440 * np.arange(len(recu)) / 16000)
     assert np.abs(recu[100:-100] - attendu[100:-100]).max() < .03  # même son, même rythme
+
+
+def _duree_enregistree(monkeypatch, signal, **k):
+    import io
+    import wave
+
+    from jarvis_thibault import ecoute
+
+    ecoute.LECTURE.update(actif=False, fin=-1e9)
+    ecoute.DERNIER_STOP["t"] = -1e9
+    _faux_micro(monkeypatch, signal)
+    wav = ecoute.enregistrer_phrase(attente_max=3, **k)
+    if not wav:
+        return 0.0
+    with wave.open(io.BytesIO(wav)) as w:
+        return w.getnframes() / w.getframerate()
+
+
+def test_il_ne_vous_coupe_pas_la_parole(monkeypatch):
+    """Vous répondez tout de suite, en parlant tantôt fort, tantôt doucement, avec de petites pauses :
+    il doit tout enregistrer jusqu'au bout (4 s), pas s'arrêter au milieu."""
+    import numpy as np
+
+    fs, rng = 16000, np.random.default_rng(4)
+    voix = _voix(4.0)
+    niveau = np.ones(len(voix))
+    niveau[int(1.0 * fs):int(2.2 * fs)] = .18      # passage dit doucement
+    niveau[int(2.6 * fs):int(3.2 * fs)] = 0         # petite pause pour réfléchir (0,6 s)
+    signal = np.r_[voix * niveau, np.zeros(int(2.5 * fs))] + rng.standard_normal(int(6.5 * fs)) * 60
+    duree = _duree_enregistree(monkeypatch, np.clip(signal, -32000, 32000).astype("int16"))
+    assert duree >= 4.0, f"coupé au bout de {duree:.1f} s"
+    assert duree <= 6.0, f"il n'a pas compris que vous aviez fini ({duree:.1f} s)"

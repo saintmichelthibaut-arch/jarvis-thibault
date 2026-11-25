@@ -65,8 +65,11 @@ DEFAUTS: Dict[str, Any] = {
     "moodle": {"actif": False, "url": ""},
     "claquement": {"actif": True, "sensibilite": 1.0},
     "bilan": {"actif": True, "heure": "19:30", "lecture_auto": False},
-    "ecoute": {"transcription": "gpt-4o-mini-transcribe", "micro": ""},
+    "ecoute": {"transcription": "gpt-4o-mini-transcribe", "micro": "", "silence_fin": 1.5},
     "serveur": {"port": 8765},
+    # Jarvis ne fait RIEN de lui-même (pas de briefing/bilan automatique, pas d'annonce à voix haute) :
+    # c'est vous qui demandez. Seuls les rappels que vous avez demandés (« rappelle-moi… ») sont dits.
+    "auto": {"actif": False},
 }
 
 

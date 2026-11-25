@@ -33,9 +33,12 @@ class Evenements:
         self._file: Deque[Dict[str, Any]] = deque(maxlen=taille)
         self._id = 0
         self._verrou = threading.Lock()
+        self.parler = True  # False : annonces affichées en silence (sauf les rappels demandés)
 
     def publier(self, type_: str, titre: str, texte: str = "", region: str = "",
                 dire: Optional[str] = None) -> Dict[str, Any]:
+        if not self.parler and type_ != "rappel":
+            dire = None
         with self._verrou:
             self._id += 1
             e = {"id": self._id, "type": type_, "titre": titre, "texte": texte,

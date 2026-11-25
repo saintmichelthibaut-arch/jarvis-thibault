@@ -95,7 +95,12 @@ sensibilite = 1.0        # plus haut = plus sensible (ex. 1.5) · plus bas = moi
 
 [ecoute]
 micro = ""                       # vide = micro du MacBook (jamais l'iPhone, les AirPods ou Teams) · ou un nom, ex. "Yeti"
+silence_fin = 1.5                # secondes de silence avant que Jarvis considère que vous avez fini (plus haut = il vous laisse réfléchir)
 interruption_sensibilite = 1.0   # pour couper Jarvis en parlant : plus haut = plus facile (ex. 1.5), plus bas = moins (ex. 0.7)
+
+[auto]
+actif = false            # false : Jarvis ne fait rien tout seul (briefing/bilan seulement quand vous les demandez,
+                         # annonces en silence). true : briefing et bilan aux heures ci-dessus, annonces à voix haute.
 
 [serveur]
 port = 8765
